@@ -107,6 +107,17 @@ describe("Scenario 5 — lesson history", () => {
   });
 });
 
+describe("lesson status for a learner", () => {
+  it("reflects the latest session, and is null when only browsed or only assigned", () => {
+    let data = createDemoData();
+    expect(d.lessonStatusForLearner(data, "anna", PS)).toBe("in_progress");
+    expect(d.lessonStatusForLearner(data, "anna", "les_introductions")).toBe("completed");
+    expect(d.lessonStatusForLearner(data, "maxim", PS)).toBeNull();
+    data = d.assignHomework(data, "maxim", PS, { type: "lesson" }, T1).data;
+    expect(d.lessonStatusForLearner(data, "maxim", PS)).toBeNull();
+  });
+});
+
 describe("Scenario 6 — resume unfinished lesson", () => {
   it("Anna has a current lesson from demo data", () => {
     const data = createDemoData();

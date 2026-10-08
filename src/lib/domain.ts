@@ -240,6 +240,20 @@ export function getLessonHistory(data: AppData, learnerId: string): HistoryEntry
   return entries.sort(latestFirst);
 }
 
+/** Where the learner is with this lesson, if they've had it: shown on cards in a learner context. */
+export function lessonStatusForLearner(
+  data: AppData,
+  learnerId: string,
+  lessonId: string,
+): LessonSession["status"] | null {
+  const ll = findLearnerLesson(data, learnerId, lessonId);
+  if (!ll) return null;
+  const latest = data.sessions
+    .filter((s) => s.learnerLessonId === ll.id)
+    .sort(latestFirst)[0];
+  return latest?.status ?? null;
+}
+
 // ───────────────────────── Homework (spec §10) ─────────────────────────
 
 export interface HomeworkTarget {

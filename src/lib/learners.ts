@@ -34,3 +34,24 @@ export const avatarBg: Record<AccentColor, string> = {
   blue: "bg-blue-lighter",
   violet: "bg-violet-lighter",
 };
+
+/**
+ * Genitive of the learner's first name for phrases like «Версия для Анны».
+ * Rule-based for common Russian first names; groups become «группы B1».
+ */
+export function genitive(learner: Learner): string {
+  if (learner.type === "group") {
+    return learner.name.replace(/^Группа/u, "группы");
+  }
+  const name = shortName(learner);
+  const last = name.at(-1)!;
+  const stem = name.slice(0, -1);
+  if (last === "а") return stem + (/[гкхжчшщ]$/u.test(stem) ? "и" : "ы");
+  if (last === "я") return stem + "и";
+  if (last === "й" || last === "ь") return stem + "я";
+  if (/[бвгджзклмнпрстфхцчшщ]/u.test(last)) return name + "а";
+  return name; // indeclinable (e.g. ends in -о, -е, -и)
+}
+
+/** «для Анны», «для группы B1». */
+export const forLearner = (learner: Learner) => `для ${genitive(learner)}`;

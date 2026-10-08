@@ -1,9 +1,11 @@
 "use client";
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
-import { BookOpen, ChevronRight, FileText, Plus, SearchX } from "lucide-react";
+import { useState } from "react";
+import { BookOpen, FileText, Plus, SearchX } from "lucide-react";
+import { LessonStatusBadge } from "@/components/ui/Badge";
+import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Menu } from "@/components/ui/Menu";
 import { SearchField } from "@/components/ui/SearchField";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -11,7 +13,7 @@ import { toast } from "@/components/ui/Toast";
 import { AddTile, FolderCard, MaterialCard } from "./Cards";
 import { LibraryDialogs, requestDelete, type DialogState } from "./LibraryDialogs";
 import { contextHref } from "@/lib/context";
-import { folderItemCount, folderPath, libraryLocation, textbookLessons } from "@/lib/domain";
+import { folderItemCount, folderPath, lessonStatusForLearner, libraryLocation, textbookLessons } from "@/lib/domain";
 import { count, LESSONS, MATERIALS, TEXTBOOKS } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { Learner } from "@/lib/types";
@@ -47,7 +49,7 @@ export function Library({ learner, folderId }: LibraryProps) {
   const folder = data.folders.find((f) => f.id === folderId) ?? null;
   const path = folderPath(data, folder?.id ?? null);
 
-  const location = useMemo(() => libraryLocation(data, folder?.id ?? null), [data, folder?.id]);
+  const location = libraryLocation(data, folder?.id ?? null);
   const q = query.trim().toLocaleLowerCase("ru");
   const matches = (title: string) => !q || title.toLocaleLowerCase("ru").includes(q);
 
@@ -90,7 +92,15 @@ export function Library({ learner, folderId }: LibraryProps) {
           </h2>
         )}
 
-        {path.length > 0 && <Breadcrumbs learnerId={learnerId} path={path} />}
+        {path.length > 0 && (
+          <Breadcrumbs
+            items={[
+              { label: "Библиотека", href: contextHref("/library", learnerId) },
+              ...path.slice(0, -1).map((f) => ({ label: f.name, href: contextHref("/library", learnerId, { folder: f.id }) })),
+            ]}
+            current={path.at(-1)!.name}
+          />
+        )}
 
         <div className="flex flex-wrap items-center gap-3">
           <SearchField
@@ -208,6 +218,7 @@ export function Library({ learner, folderId }: LibraryProps) {
                       title={l.title}
                       caption="Урок"
                       cover={l.cover}
+                      badge={learnerId && <LessonStatusBadge status={lessonStatusForLearner(data, learnerId, l.id)} />}
                       actions={
                         editable
                           ? {
@@ -244,64 +255,12 @@ export function Library({ learner, folderId }: LibraryProps) {
   );
 }
 
-function Breadcrumbs({ learnerId, path }: { learnerId: string | null; path: { id: string; name: string }[] }) {
-  return (
-    <nav aria-label="Путь в библиотеке">
-      <ol className="flex flex-wrap items-center gap-1 text-body">
-        <li>
-          <Link href={contextHref("/library", learnerId)} className="rounded-xs font-medium text-ink-secondary hover:text-action">
-            Библиотека
-          </Link>
-        </li>
-        {path.map((f, i) => (
-          <li key={f.id} className="flex items-center gap-1">
-            <ChevronRight size={16} strokeWidth={1.75} className="text-neutral-400" aria-hidden />
-            {i === path.length - 1 ? (
-              <span aria-current="page" className="font-semibold text-ink">
-                {f.name}
-              </span>
-            ) : (
-              <Link
-                href={contextHref("/library", learnerId, { folder: f.id })}
-                className="rounded-xs font-medium text-ink-secondary hover:text-action"
-              >
-                {f.name}
-              </Link>
-            )}
-          </li>
-        ))}
-      </ol>
-    </nav>
-  );
-}
-
-function SectionLabel({ label, count, summary }: { label: string; count?: number; summary?: string }) {
+export function SectionLabel({ label, count, summary }: { label: string; count?: number; summary?: string }) {
   return (
     <h3 className="mb-3 flex items-baseline gap-3">
       <span className="text-caption font-bold tracking-wider text-ink-secondary uppercase">{label}</span>
       {count !== undefined && <span className="text-caption text-neutral-400">{count}</span>}
       {summary && <span className="text-caption text-neutral-400">{summary}</span>}
     </h3>
-  );
-}
-
-function EmptyState({
-  icon,
-  title,
-  description,
-  action,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col items-center rounded-lg border border-line px-6 py-14 text-center">
-      <span className="grid size-14 place-items-center rounded-full bg-light text-action">{icon}</span>
-      <p className="mt-4 text-h3">{title}</p>
-      <p className="mt-1 max-w-sm text-ink-secondary">{description}</p>
-      {action && <div className="mt-5">{action}</div>}
-    </div>
   );
 }

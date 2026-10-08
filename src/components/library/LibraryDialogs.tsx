@@ -19,7 +19,7 @@ export type DialogState =
   | { type: "create"; kind: "lesson" | "textbook" | "folder" }
   | { type: "rename"; target: Target }
   | { type: "delete"; target: Target }
-  | { type: "blocked"; reason: BlockReason }
+  | { type: "blocked"; reason: BlockReason; title?: string; description?: string }
   | { type: "move"; target: Target & { kind: "lesson" | "textbook" } };
 
 /** Delete goes straight to an explanation when it would be refused, instead of a confirm that then fails. */
@@ -41,9 +41,11 @@ interface LibraryDialogsProps {
   onClose: () => void;
   /** Where new items are created. */
   folderId: string | null;
+  /** Called after a successful delete, e.g. to leave a screen whose subject is gone. */
+  onDeleted?: (target: Target) => void;
 }
 
-export function LibraryDialogs({ state, onClose, folderId }: LibraryDialogsProps) {
+export function LibraryDialogs({ state, onClose, folderId, onDeleted }: LibraryDialogsProps) {
   const store = useStore();
 
   return (
@@ -95,14 +97,16 @@ export function LibraryDialogs({ state, onClose, folderId }: LibraryDialogsProps
           const { target } = state;
           const result =
             target.kind === "folder" ? store.deleteFolder(target.id) : store.deleteMaterial(target.kind, target.id);
-          if (result.ok) toast("Удалено");
+          if (!result.ok) return;
+          toast("Удалено");
+          onDeleted?.(target);
         }}
       />
 
       <NoticeDialog
         open={state?.type === "blocked"}
-        title={state?.type === "blocked" ? blockMessages[state.reason].title : ""}
-        description={state?.type === "blocked" ? blockMessages[state.reason].description : ""}
+        title={state?.type === "blocked" ? (state.title ?? blockMessages[state.reason].title) : ""}
+        description={state?.type === "blocked" ? (state.description ?? blockMessages[state.reason].description) : ""}
         onClose={onClose}
       />
 
