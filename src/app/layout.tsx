@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Montserrat_Alternates } from "next/font/google";
 import { AppHeader } from "@/components/AppHeader";
 import { StoreHydrator } from "@/components/StoreGate";
+import { Toaster } from "@/components/ui/Toast";
 import "./globals.css";
 
 const montserratAlternates = Montserrat_Alternates({
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <StoreHydrator />
         <AppHeader />
         <main className="mx-auto w-full max-w-[1264px] flex-1 px-8 pt-8 pb-16">{children}</main>
+        <Toaster />
       </body>
     </html>
   );

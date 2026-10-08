@@ -1,6 +1,8 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { LearnerSelector } from "@/components/LearnerSelector";
+import { Library } from "@/components/library/Library";
 import { Avatar } from "@/components/ui/Avatar";
 import { useActiveLearner } from "@/lib/context";
 import { learnerTypeLabel } from "@/lib/learners";
@@ -9,19 +11,15 @@ import type { Learner } from "@/lib/types";
 /** The Library page in either context. Learner sections are an extra layer above the same library. */
 export function LibraryScreen() {
   const learner = useActiveLearner();
+  const folderId = useSearchParams().get("folder");
 
   return (
     <div className="flex flex-col gap-10">
       <LearnerSelector activeLearnerId={learner?.id ?? null} />
       {learner ? <LearnerHeader learner={learner} /> : <GlobalHeader />}
 
-      {/* Step 3 replaces this with the shared <Library> component. */}
-      <section
-        aria-label="Материалы"
-        className="grid h-48 place-items-center rounded-lg border border-dashed border-line-strong text-ink-secondary"
-      >
-        Здесь появится библиотека (шаг 3)
-      </section>
+      {/* Step 5 adds the learner's current lesson, homework and history here. */}
+      <Library key={folderId ?? "root"} learner={learner} folderId={folderId} />
     </div>
   );
 }

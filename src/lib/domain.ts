@@ -4,6 +4,8 @@
 import type {
   AppData,
   AccentColor,
+  BlockReason,
+  Folder,
   HomeworkAssignment,
   HomeworkStatus,
   HomeworkTargetType,
@@ -358,6 +360,31 @@ export function deleteFolder(data: AppData, folderId: string): Result {
   return ok(next);
 }
 
+/** Folders from the root down to folderId (inclusive). */
+export function folderPath(data: AppData, folderId: string | null): Folder[] {
+  const path: Folder[] = [];
+  let current = data.folders.find((f) => f.id === folderId);
+  while (current) {
+    path.unshift(current);
+    current = data.folders.find((f) => f.id === current!.parentFolderId);
+  }
+  return path;
+}
+
+/** What one library location contains. Textbook lessons are not listed here. */
+export function libraryLocation(data: AppData, folderId: string | null) {
+  const byTitle = (a: { title: string }, b: { title: string }) => a.title.localeCompare(b.title, "ru");
+  return {
+    folders: data.folders
+      .filter((f) => f.parentFolderId === folderId)
+      .sort((a, b) => a.name.localeCompare(b.name, "ru")),
+    textbooks: data.textbooks.filter((t) => t.folderId === folderId).sort(byTitle),
+    lessons: data.lessons
+      .filter((l) => l.textbookId === null && l.folderId === folderId)
+      .sort(byTitle),
+  };
+}
+
 // ───────────────────────── Materials (spec §5.4–5.5) ─────────────────────────
 
 export function createTextbook(
@@ -536,6 +563,21 @@ export function duplicateTextbook(
 /** True when any learner has their own version (and so history or homework) of the lesson. */
 export function lessonHasLearnerActivity(data: AppData, lessonId: string): boolean {
   return data.learnerLessons.some((ll) => ll.sourceLessonId === lessonId);
+}
+
+/** Why deleting this item would be refused, or null if it can be deleted. Lets the UI explain before confirming. */
+export function deleteBlockReason(
+  data: AppData,
+  kind: "folder" | "lesson" | "textbook",
+  id: string,
+): BlockReason | null {
+  const result =
+    kind === "folder"
+      ? deleteFolder(data, id)
+      : kind === "lesson"
+        ? deleteLesson(data, id)
+        : deleteTextbook(data, id);
+  return result.ok ? null : result.reason;
 }
 
 function detachFromTextbooks(next: AppData, lessonId: string) {

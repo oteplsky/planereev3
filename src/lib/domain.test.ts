@@ -239,6 +239,32 @@ describe("library management", () => {
   });
 });
 
+describe("library queries", () => {
+  it("lists one location: subfolders, textbooks, standalone lessons only", () => {
+    const loc = d.libraryLocation(createDemoData(), "fld_grammar");
+    expect(loc.textbooks.map((t) => t.id)).toEqual(["tb_grammar_a2"]);
+    expect(loc.lessons.map((l) => l.id)).toEqual(["les_conditionals"]);
+    const root = d.libraryLocation(createDemoData(), null);
+    expect(root.folders).toHaveLength(3);
+    expect(root.lessons.every((l) => l.textbookId === null && l.folderId === null)).toBe(true);
+  });
+
+  it("builds a folder path from the root", () => {
+    let data = createDemoData();
+    const sub = d.createFolder(data, "Подпапка", "fld_grammar");
+    data = sub.data;
+    expect(d.folderPath(data, sub.folderId).map((f) => f.name)).toEqual(["Грамматика", "Подпапка"]);
+    expect(d.folderPath(data, null)).toEqual([]);
+  });
+
+  it("explains a blocked delete without changing data", () => {
+    const data = createDemoData();
+    expect(d.deleteBlockReason(data, "folder", "fld_publishers")).toBe("folder_not_empty");
+    expect(d.deleteBlockReason(data, "lesson", PS)).toBe("has_learner_activity");
+    expect(d.deleteBlockReason(data, "lesson", "les_weather")).toBeNull();
+  });
+});
+
 describe("demo data integrity", () => {
   const data = createDemoData();
 
