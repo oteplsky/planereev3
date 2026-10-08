@@ -14,6 +14,11 @@ const sizes = {
   lg: "h-12 px-5 gap-2",
 } as const;
 
+/** Shared classes so links that look like buttons (e.g. «Продолжить урок») match exactly. */
+export function buttonClass(variant: keyof typeof variants = "secondary", size: keyof typeof sizes = "md") {
+  return `inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-sm font-semibold transition-colors duration-[120ms] disabled:pointer-events-none disabled:opacity-40 ${variants[variant]} ${sizes[size]}`;
+}
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: keyof typeof variants;
   size?: keyof typeof sizes;
@@ -31,7 +36,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       type="button"
-      className={`inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-sm font-semibold transition-colors duration-[120ms] disabled:pointer-events-none disabled:opacity-40 ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`${buttonClass(variant, size)} ${className}`}
       {...props}
     >
       {icon}

@@ -18,9 +18,21 @@ export function Badge({ tone = "neutral", children }: { tone?: BadgeTone; childr
   );
 }
 
-/** Learner's progress with a lesson. */
+/** Learner's progress with a lesson (spec §9 statuses). */
 export function LessonStatusBadge({ status }: { status: "in_progress" | "completed" | null }) {
-  if (status === "in_progress") return <Badge tone="info">Идёт урок</Badge>;
-  if (status === "completed") return <Badge tone="success">Пройден</Badge>;
+  if (status === "in_progress") return <Badge tone="info">В процессе</Badge>;
+  if (status === "completed") return <Badge tone="success">Завершён</Badge>;
   return null;
+}
+
+/** Spec §10.2. «Выполнено» waits for the teacher, so it gets the attention tone. */
+export const homeworkStatus = {
+  assigned: { label: "Назначено", tone: "info" },
+  completed: { label: "Выполнено", tone: "warning" },
+  reviewed: { label: "Проверено", tone: "success" },
+} as const satisfies Record<string, { label: string; tone: BadgeTone }>;
+
+export function HomeworkStatusBadge({ status }: { status: keyof typeof homeworkStatus }) {
+  const { label, tone } = homeworkStatus[status];
+  return <Badge tone={tone}>{label}</Badge>;
 }

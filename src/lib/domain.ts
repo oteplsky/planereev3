@@ -254,6 +254,14 @@ export function lessonStatusForLearner(
   return latest?.status ?? null;
 }
 
+/** The global lesson (and its textbook) behind a learner's lesson. */
+export function lessonOfLearnerLesson(data: AppData, learnerLessonId: string) {
+  const ll = data.learnerLessons.find((x) => x.id === learnerLessonId);
+  const lesson = ll && data.lessons.find((l) => l.id === ll.sourceLessonId);
+  if (!lesson) return null;
+  return { lesson, textbook: data.textbooks.find((t) => t.id === lesson.textbookId) ?? null };
+}
+
 // ───────────────────────── Homework (spec §10) ─────────────────────────
 
 export interface HomeworkTarget {

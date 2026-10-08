@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { LearnerSelector } from "@/components/LearnerSelector";
+import { LearnerWorkspace } from "@/components/learner/LearnerWorkspace";
 import { Library } from "@/components/library/Library";
 import { Avatar } from "@/components/ui/Avatar";
 import { useActiveLearner } from "@/lib/context";
@@ -18,7 +19,7 @@ export function LibraryScreen() {
       <LearnerSelector activeLearnerId={learner?.id ?? null} />
       {learner ? <LearnerHeader learner={learner} /> : <GlobalHeader />}
 
-      {/* Step 5 adds the learner's current lesson, homework and history here. */}
+      {learner && <LearnerWorkspace learner={learner} />}
       <Library key={folderId ?? "root"} learner={learner} folderId={folderId} />
     </div>
   );
