@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Planeree — Library prototype
 
-## Getting Started
+A clickable prototype of the Planeree LMS Library for independent language teachers.
+It validates navigation, the learner context switch, and lesson personalization:
+**one shared library, and an independent version of a lesson for each learner who uses it.**
 
-First, run the development server:
+The interface is in Russian; code and docs are in English. There is no backend —
+all data lives in the browser's `localStorage`.
+
+- Design: [Planeree UI kit v1.4](https://planeree-ui-kit.jija123123.chatgpt.site) (light theme) and
+  [brand guidelines](https://planeree-brand-guidelines.jija123123.chatgpt.site)
+- Stack: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, Zustand, Vitest
+
+## Run it
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev      # http://localhost:3000
+npm test         # domain rules and helpers
+npm run lint
+npm run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Requires Node 20.9+ (developed on Node 24).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> This Next.js version differs from older ones. Before changing framework-level code,
+> read the bundled docs in `node_modules/next/dist/docs/` (see `AGENTS.md`).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## The core rule
 
-## Learn More
+Every lesson has a **global version** in the library. A learner gets **their own version**
+only when the teacher does one of three things with that learner:
 
-To learn more about Next.js, take a look at the following resources:
+1. starts the lesson (`startLesson`),
+2. adapts it (`updateLearnerLessonContent`),
+3. assigns homework from it (`assignHomework`).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Browsing never creates one (`resolveLesson` is read-only). Once created, a learner's version
+is independent: later global edits don't reach it, and there is no sync or reset.
+The UI never says "copy" — it says «Общий материал» and «Версия для Анны».
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Deleting a folder, textbook, section or lesson is blocked (with an explanation) when it
+would lose learner history or isn't empty.
 
-## Deploy on Vercel
+## Where things are
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+src/lib/
+  types.ts        Data model (spec §13) + `adapted` flag on blocks
+  domain.ts       All product rules as pure functions (AppData in → AppData out)
+  domain.test.ts  Acceptance scenarios 3–7, deletion rules, demo data integrity
+  store.ts        Zustand store persisted to localStorage; thin wrapper over domain.ts
+  demo-data.ts    Learners, folders, textbooks, lessons and histories (spec §14)
+  context.ts      Learner context from `?learner=` and link helper
+  learners.ts     Initials, labels, genitive names («для Анны»)
+  format.ts       Russian plurals and dates
+src/components/
+  ui/             UI kit primitives: Button, Menu, Dialog, Badge, SegmentedControl, …
+  library/        The one Library component, shared by global and learner contexts
+  textbook/       Textbook view with sections
+  learner/        Learner workspace, homework and history
+  lesson/         Lesson placeholder: blocks, editor, homework dialog
+src/app/          Routes: /library, /textbook/[id], /lesson/[id], /homework, /history
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Context is part of the URL — `/library?learner=anna`, `/lesson/les_present_simple?learner=anna` —
+so refresh and links keep it. No `learner` means the global library.
+
+## Demo walkthrough
+
+| Scenario | Try this |
+|---|---|
+| Global content | «Библиотека» → «+ Создать», folders, ⋯ menus; open a textbook to manage sections |
+| Learner navigation | Switch Библиотека → Анна → Максим in the top strip |
+| Personalized lesson | Анна → English File Elementary → Present Simple → «Адаптировать урок» → add an exercise → save. Open the same lesson for Максим: it isn't there |
+| Global edits don't propagate | Библиотека → Present Simple → «Редактировать» → change a block. Анна keeps hers; Максим sees the change |
+| History | София → any lesson → «Начать урок» → «Завершить урок» → it appears in «История уроков» |
+| Resume | Анна → «Продолжить урок» |
+| Homework | Максим → lesson → «Назначить домашку»; change status from the card's ⋯ menu |
+
+**Reset demo data:** run `localStorage.removeItem("planeree-library")` in the browser console
+and reload. Changing the data shape? Bump `STORAGE_VERSION` in `store.ts`; older saved data is
+then replaced by fresh demo data.
+
+## Deploy
+
+Vercel detects Next.js automatically; no extra configuration is needed.
+Import the Git repository at [vercel.com/new](https://vercel.com/new) and keep the defaults
+(build `npm run build`). The `/` → `/library` redirect lives in `next.config.ts`.

@@ -79,7 +79,7 @@ function SectionHeader({
     <div className="mb-4 flex items-baseline justify-between gap-4">
       <h2 id={id} className="flex items-baseline gap-2 text-h2">
         {title}
-        {total > 0 && <span className="text-body-lg font-semibold text-neutral-400">{total}</span>}
+        {total > 0 && <span className="text-body-lg font-semibold text-ink-secondary">{total}</span>}
       </h2>
       {total > 0 && (
         <Link href={moreHref} className="flex items-center gap-1 rounded-xs font-semibold text-action hover:text-action-hover">

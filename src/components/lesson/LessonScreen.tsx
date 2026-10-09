@@ -90,7 +90,7 @@ export function LessonScreen() {
       <section aria-label="Пространство урока" className="rounded-xl border border-line p-4 sm:p-6">
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-caption font-bold tracking-wider text-ink-secondary uppercase">Пространство урока</h2>
-          <span className="text-caption text-neutral-400">Конструктор появится позже — сейчас здесь упрощённое содержание</span>
+          <span className="text-caption text-ink-secondary">Конструктор появится позже — сейчас здесь упрощённое содержание</span>
         </div>
 
         {editing ? (

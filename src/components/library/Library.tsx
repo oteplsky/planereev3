@@ -259,8 +259,8 @@ export function SectionLabel({ label, count, summary }: { label: string; count?:
   return (
     <h3 className="mb-3 flex items-baseline gap-3">
       <span className="text-caption font-bold tracking-wider text-ink-secondary uppercase">{label}</span>
-      {count !== undefined && <span className="text-caption text-neutral-400">{count}</span>}
-      {summary && <span className="text-caption text-neutral-400">{summary}</span>}
+      {count !== undefined && <span className="text-caption text-ink-secondary">{count}</span>}
+      {summary && <span className="text-caption text-ink-secondary">{summary}</span>}
     </h3>
   );
 }

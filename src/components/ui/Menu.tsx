@@ -84,7 +84,8 @@ export function Menu({ trigger, items, align = "right" }: MenuProps) {
               type="button"
               role="menuitem"
               onClick={() => {
-                close(false);
+                // Focus the trigger first so a dialog opened by this item returns focus there on close.
+                close(true);
                 item.onSelect();
               }}
               className={`flex w-full items-center gap-2.5 whitespace-nowrap rounded-sm px-3 py-2 text-left font-medium outline-none transition-colors duration-[120ms] hover:bg-hover focus-visible:bg-hover ${item.danger ? "text-danger-hover" : "text-ink"}`}

@@ -191,7 +191,7 @@ export function TextbookScreen() {
               <h2 id={`sec-${section.id}`} className="text-caption font-bold tracking-wider text-ink-secondary uppercase">
                 {section.title}
               </h2>
-              <span className="text-caption text-neutral-400">{count(lessons.length, LESSONS)}</span>
+              <span className="text-caption text-ink-secondary">{count(lessons.length, LESSONS)}</span>
             </div>
             {editable && (
               <Menu
