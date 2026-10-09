@@ -128,6 +128,19 @@ export function updateLearnerLessonContent(
   return next;
 }
 
+/**
+ * Marks blocks that are new or changed compared with `before`, for edits made in a
+ * learner context. Untouched blocks keep their existing flag.
+ */
+export function markAdapted(before: LessonBlock[], after: LessonBlock[]): LessonBlock[] {
+  const original = new Map(before.map((b) => [b.id, b]));
+  return after.map((block) => {
+    const prev = original.get(block.id);
+    const changed = !prev || prev.title !== block.title || prev.content !== block.content || prev.type !== block.type;
+    return changed ? { ...block, adapted: true } : block;
+  });
+}
+
 export function newBlock(
   type: LessonBlock["type"],
   title: string,

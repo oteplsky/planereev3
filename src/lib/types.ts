@@ -52,6 +52,8 @@ export interface LessonBlock {
   type: "text" | "exercise";
   title: string;
   content: string;
+  /** Set on blocks added or changed for a specific learner, so the adaptation is visible. */
+  adapted?: boolean;
 }
 
 export interface MockLessonContent {

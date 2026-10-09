@@ -56,6 +56,24 @@ describe("Scenario 3 — personalized lesson stays with its learner", () => {
   });
 });
 
+describe("adapted blocks", () => {
+  it("flags only new or changed blocks", () => {
+    const before = [d.newBlock("text", "A", "a"), d.newBlock("exercise", "B", "b")];
+    const added = d.newBlock("exercise", "C", "c");
+    const after = [before[0], { ...before[1], content: "b2" }, added];
+    expect(d.markAdapted(before, after).map((b) => !!b.adapted)).toEqual([false, true, true]);
+  });
+
+  it("demo data shows Anna's extra exercise and Maxim's vocabulary as adapted", () => {
+    const data = createDemoData();
+    const anna = d.resolveLesson(data, PS, "anna")!.content.blocks;
+    expect(anna.filter((b) => b.adapted).map((b) => b.title)).toEqual(["Дополнительная практика Present Simple"]);
+    const maxim = d.resolveLesson(data, "les_everyday_vocab", "maxim")!.content.blocks;
+    expect(maxim.every((b) => b.adapted)).toBe(true);
+    expect(d.resolveLesson(data, "les_everyday_vocab", null)!.content.blocks.some((b) => b.adapted)).toBe(false);
+  });
+});
+
 describe("Scenario 4 — global edits do not propagate", () => {
   it("updates learners without a version, leaves Anna's version unchanged", () => {
     let data = createDemoData();

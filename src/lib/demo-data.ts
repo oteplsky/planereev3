@@ -25,6 +25,7 @@ const exercise = (id: string, title: string, content: string): LessonBlock => ({
   title,
   content,
 });
+const adapted = (block: LessonBlock): LessonBlock => ({ ...block, adapted: true });
 
 function lesson(
   id: string,
@@ -259,25 +260,27 @@ const learnerLessons: LearnerLesson[] = [
   // Анна — Present Simple with additional practice
   learnerCopy("ll_anna_ps", "anna", "les_present_simple", at("2026-10-07", "15:00"), [
     ...lessonById("les_present_simple").content.blocks,
-    exercise(
-      "blk_anna_extra",
-      "Дополнительная практика Present Simple",
-      "Расскажите про распорядок дня вашей подруги: she gets up, she goes…",
+    adapted(
+      exercise(
+        "blk_anna_extra",
+        "Дополнительная практика Present Simple",
+        "Расскажите про распорядок дня вашей подруги: she gets up, she goes…",
+      ),
     ),
   ]),
   learnerCopy("ll_anna_intro", "anna", "les_introductions", at("2026-10-01", "15:00")),
 
   // Максим — Everyday Vocabulary adapted for medical English
   learnerCopy("ll_max_vocab", "maxim", "les_everyday_vocab", at("2026-10-06", "18:00"), [
-    text(
-      "blk_ev_1",
-      "Лексика",
-      "appointment, diagnosis, symptoms, prescription, ward, discharge",
+    adapted(
+      text("blk_ev_1", "Медицинская лексика", "appointment, diagnosis, symptoms, prescription, ward, discharge"),
     ),
-    exercise(
-      "blk_ev_2",
-      "Упражнение 1. Составьте предложения",
-      "Опишите приём пациента, используя 5 новых слов.",
+    adapted(
+      exercise(
+        "blk_ev_2",
+        "Упражнение 1. Составьте предложения",
+        "Опишите приём пациента, используя 5 новых слов.",
+      ),
     ),
   ]),
 

@@ -1,12 +1,12 @@
 import { Suspense } from "react";
-import { ComingSoon } from "@/components/ComingSoon";
+import { LessonScreen } from "@/components/lesson/LessonScreen";
 import { Hydrated } from "@/components/StoreGate";
 
 export default function Page() {
   return (
     <Suspense>
       <Hydrated>
-        <ComingSoon kind="lesson" />
+        <LessonScreen />
       </Hydrated>
     </Suspense>
   );

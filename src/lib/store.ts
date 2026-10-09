@@ -17,7 +17,7 @@ import type {
 
 const STORAGE_KEY = "planeree-library";
 /** Bump when the data shape changes; stored data from older versions is replaced by demo data. */
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2;
 
 const now = () => new Date().toISOString();
 
