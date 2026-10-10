@@ -439,6 +439,20 @@ export function folderPath(data: AppData, folderId: string | null): Folder[] {
   return path;
 }
 
+/**
+ * Search across the whole library, wherever materials sit: textbooks and standalone lessons
+ * as one flat list. Lessons inside textbooks are found through their textbook.
+ */
+export function searchMaterials(data: AppData, query: string) {
+  const q = query.trim().toLocaleLowerCase("ru");
+  const byTitle = (a: { title: string }, b: { title: string }) => a.title.localeCompare(b.title, "ru");
+  const hit = (title: string) => title.toLocaleLowerCase("ru").includes(q);
+  return {
+    textbooks: data.textbooks.filter((t) => hit(t.title)).sort(byTitle),
+    lessons: data.lessons.filter((l) => l.textbookId === null && hit(l.title)).sort(byTitle),
+  };
+}
+
 /** What one library location contains. Textbook lessons are not listed here. */
 export function libraryLocation(data: AppData, folderId: string | null) {
   const byTitle = (a: { title: string }, b: { title: string }) => a.title.localeCompare(b.title, "ru");

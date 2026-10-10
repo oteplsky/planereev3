@@ -323,6 +323,19 @@ describe("library queries", () => {
   });
 });
 
+describe("search", () => {
+  it("finds materials in every folder as one flat list", () => {
+    const r = d.searchMaterials(createDemoData(), "  CONDITIONAL ");
+    expect(r.lessons.map((l) => l.id)).toEqual(["les_second_conditional", "les_conditionals"]);
+    expect(r.lessons.every((l) => l.folderId === "fld_grammar")).toBe(true);
+    expect(d.searchMaterials(createDemoData(), "english file").textbooks).toHaveLength(3);
+  });
+
+  it("skips lessons inside textbooks", () => {
+    expect(d.searchMaterials(createDemoData(), "Present Simple").lessons).toEqual([]);
+  });
+});
+
 describe("groups", () => {
   it("adds students to a group, skipping existing members and non-students", () => {
     const data = d.addGroupMembers(createDemoData(), "group_a2", ["anna", "irina", "group_b1", "nobody"]);

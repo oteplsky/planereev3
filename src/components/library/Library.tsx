@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, FileText, FolderOpen, SearchX } from "lucide-react";
+import { BookOpen, FileText, FolderOpen, FolderOutput, SearchX } from "lucide-react";
 import { LessonStatusChips, UsedChip } from "@/components/ui/Badge";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Menu } from "@/components/ui/Menu";
+import { Menu, type MenuItem } from "@/components/ui/Menu";
 import { SearchField } from "@/components/ui/SearchField";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { toast } from "@/components/ui/Toast";
@@ -19,6 +19,7 @@ import {
   homeworkStatusForLearner,
   lessonStatusForLearner,
   libraryLocation,
+  searchMaterials,
   textbookLessons,
   textbookUsedByLearner,
 } from "@/lib/domain";
@@ -42,11 +43,13 @@ interface LibraryProps {
 
 /**
  * The one library implementation, shared by the global and learner contexts (spec §7.1).
- * Search and filters apply to the current location (spec §5.6).
+ * Two levels only: the root and one open folder. Search covers the whole library and shows
+ * a flat list without folders; the type filter alone applies to the current location.
  */
 export function Library({ learner, folderId }: LibraryProps) {
   const data = useStore((s) => s.data);
   const duplicateMaterial = useStore((s) => s.duplicateMaterial);
+  const moveMaterial = useStore((s) => s.moveMaterial);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [dialog, setDialog] = useState<DialogState>(null);
@@ -58,16 +61,32 @@ export function Library({ learner, folderId }: LibraryProps) {
   const path = folderPath(data, folder?.id ?? null);
 
   const location = libraryLocation(data, folder?.id ?? null);
-  const q = query.trim().toLocaleLowerCase("ru");
-  const matches = (title: string) => !q || title.toLocaleLowerCase("ru").includes(q);
+  const searching = query.trim() !== "";
+  const source = searching ? searchMaterials(data, query) : location;
 
-  const folders = filter === "all" ? location.folders.filter((f) => matches(f.name)) : [];
-  const textbooks = filter === "lessons" ? [] : location.textbooks.filter((t) => matches(t.title));
-  const lessons = filter === "textbooks" ? [] : location.lessons.filter((l) => matches(l.title));
-  const isFiltering = q !== "" || filter !== "all";
+  // Folders live only at the root and never appear in search results.
+  const folders = !searching && !folder && filter === "all" ? location.folders : [];
+  const textbooks = filter === "lessons" ? [] : source.textbooks;
+  const lessons = filter === "textbooks" ? [] : source.lessons;
+  const isFiltering = searching || filter !== "all";
   const nothingFound = isFiltering && folders.length + textbooks.length + lessons.length === 0;
   const locationEmpty =
     location.folders.length + location.textbooks.length + location.lessons.length === 0;
+
+  /** «Убрать из папки»: the material stays in the library and goes back to the root. */
+  const removeFromFolder = (kind: "lesson" | "textbook", item: { id: string; folderId: string | null }): MenuItem[] =>
+    item.folderId
+      ? [
+          {
+            label: "Убрать из папки",
+            icon: <FolderOutput size={18} strokeWidth={1.75} aria-hidden />,
+            onSelect: () => {
+              moveMaterial(kind, item.id, null);
+              toast("Перенесено в «Библиотеку»");
+            },
+          },
+        ]
+      : [];
 
   const duplicate = (kind: "lesson" | "textbook", id: string) => {
     duplicateMaterial(kind, id);
@@ -96,7 +115,7 @@ export function Library({ learner, folderId }: LibraryProps) {
           <SearchField
             value={query}
             onChange={setQuery}
-            placeholder={folder ? `Поиск в «${folder.name}»` : "Поиск по названию"}
+            placeholder="Поиск по названию"
             className="min-w-60 flex-1"
           />
           <SegmentedControl label="Тип материала" options={filterOptions} value={filter} onChange={setFilter} />
@@ -121,11 +140,11 @@ export function Library({ learner, folderId }: LibraryProps) {
         />
       ) : (
         <>
-          {(folders.length > 0 || (editable && !isFiltering)) && (
+          {(folders.length > 0 || (editable && !isFiltering && !folder)) && (
             <div>
               <SectionLabel label="Папки" />
               <div className={GRID}>
-                {editable && !isFiltering && (
+                {editable && !isFiltering && !folder && (
                   <AddTile label="Добавить папку" onClick={() => setDialog({ type: "create", kind: "folder" })} />
                 )}
                 {folders.map((f) => (
@@ -150,7 +169,7 @@ export function Library({ learner, folderId }: LibraryProps) {
 
           {(textbooks.length + lessons.length > 0 || (editable && !isFiltering)) && (
             <div>
-              <SectionLabel label="Материалы" />
+              <SectionLabel label={searching ? "Результаты поиска" : "Материалы"} />
               <div className={GRID}>
                 {editable && !isFiltering && (
                   <Menu
@@ -189,6 +208,7 @@ export function Library({ learner, folderId }: LibraryProps) {
                               onRename: () => setDialog({ type: "rename", target }),
                               onDuplicate: () => duplicate("textbook", t.id),
                               onMove: () => setDialog({ type: "move", target }),
+                              extra: removeFromFolder("textbook", t),
                               onDelete: () => setDialog(requestDelete(data, target)),
                             }
                           : undefined
@@ -219,6 +239,7 @@ export function Library({ learner, folderId }: LibraryProps) {
                               onRename: () => setDialog({ type: "rename", target }),
                               onDuplicate: () => duplicate("lesson", l.id),
                               onMove: () => setDialog({ type: "move", target }),
+                              extra: removeFromFolder("lesson", l),
                               onDelete: () => setDialog(requestDelete(data, target)),
                             }
                           : undefined

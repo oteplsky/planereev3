@@ -4,7 +4,7 @@ import { Check, Folder as FolderIcon, LibraryBig } from "lucide-react";
 import { ConfirmDialog, Dialog, NoticeDialog, PromptDialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui/Toast";
-import { deleteBlockReason, folderItemCount, folderPath } from "@/lib/domain";
+import { deleteBlockReason, folderPath } from "@/lib/domain";
 import { blockMessages } from "@/lib/messages";
 import { useStore } from "@/lib/store";
 import type { AppData, BlockReason } from "@/lib/types";
@@ -59,7 +59,8 @@ export function LibraryDialogs({ state, onClose, folderId, onDeleted }: LibraryD
         onClose={onClose}
         onSubmit={(title) => {
           if (state?.type !== "create") return;
-          if (state.kind === "folder") store.createFolder(title, folderId);
+          // Folders exist only at the root: no nesting in the MVP.
+          if (state.kind === "folder") store.createFolder(title, null);
           else if (state.kind === "textbook") store.createTextbook(title, folderId);
           else store.createLesson(title, { folderId });
           toast(createCopy[state.kind].done);
@@ -91,9 +92,7 @@ export function LibraryDialogs({ state, onClose, folderId, onDeleted }: LibraryD
           state?.type !== "delete"
             ? undefined
             : state.target.kind === "folder"
-              ? folderItemCount(store.data, state.target.id) > 0
-                ? "Папка будет удалена, а находящиеся в ней материалы автоматически переместятся в раздел «Библиотека»."
-                : undefined
+              ? "Папка будет удалена, а находящиеся в ней материалы автоматически переместятся в раздел „Библиотека“."
               : state.target.kind === "textbook"
                 ? "Учебник удалится вместе со всеми уроками. Это действие нельзя отменить."
                 : "Это действие нельзя отменить."
@@ -150,7 +149,7 @@ function MoveDialog({ state, onClose }: { state: DialogState; onClose: () => voi
   const move = (folderId: string | null, name: string) => {
     if (!target) return;
     moveMaterial(target.kind, target.id, folderId);
-    toast(folderId ? `Перенесено в «${name}»` : "Перенесено в корень библиотеки");
+    toast(folderId ? `Перенесено в «${name}»` : "Перенесено в «Библиотеку»");
     onClose();
   };
 
