@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ArrowDown, Check, Ellipsis, ExternalLink, Play, RotateCcw } from "lucide-react";
-import { HomeworkStatusBadge, LessonStatusBadge } from "@/components/ui/Badge";
-import { buttonClass, IconButton } from "@/components/ui/Button";
-import { Menu, type MenuItem } from "@/components/ui/Menu";
+import { Check, ChevronDown, Play, RotateCcw } from "lucide-react";
+import { HomeworkChip, HomeworkRing, homeworkChipLabel, lessonStatus, LessonStatusIcon } from "@/components/ui/Badge";
+import { buttonClass, textButtonClass } from "@/components/ui/Button";
+import { Menu } from "@/components/ui/Menu";
 import { toast } from "@/components/ui/Toast";
 import { contextHref } from "@/lib/context";
 import { lessonOfLearnerLesson, type HistoryEntry } from "@/lib/domain";
@@ -15,20 +14,19 @@ import type { HomeworkAssignment, HomeworkStatus, LessonSession } from "@/lib/ty
 
 const iconProps = { size: 18, strokeWidth: 1.75, "aria-hidden": true } as const;
 
-/** Spec §8.1–8.2: resume the unfinished lesson, or a compact hint — never a misleading «Начать урок». */
+/** Spec §8.1–8.2: resume the unfinished lesson, or invite to pick material when there is none. */
 export function CurrentLesson({ session }: { session: LessonSession | null }) {
   const data = useStore((s) => s.data);
   const context = session && lessonOfLearnerLesson(data, session.learnerLessonId);
-
   if (!session || !context) {
     return (
-      <div className="flex items-center gap-3 rounded-lg border border-dashed border-line-strong px-5 py-4 text-ink-secondary">
-        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-light text-action">
-          <Play size={16} strokeWidth={2} aria-hidden />
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-dashed border-line-strong px-5 py-4">
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-light text-action">
+          <Play size={18} strokeWidth={2} aria-hidden className="translate-x-px" />
         </span>
-        <p className="flex-1">Выберите урок из библиотеки, чтобы начать занятие</p>
-        <a href="#library-heading" className="flex items-center gap-1 rounded-xs font-semibold text-action hover:text-action-hover">
-          К библиотеке <ArrowDown size={16} strokeWidth={1.75} aria-hidden />
+        <p className="flex-1 font-semibold">Выберите материал, чтобы начать урок</p>
+        <a href="#library-heading" className={textButtonClass}>
+          Выбрать материал
         </a>
       </div>
     );
@@ -49,19 +47,14 @@ export function CurrentLesson({ session }: { session: LessonSession | null }) {
           {textbook ? `${textbook.title} · ` : ""}последнее занятие {formatDate(session.lastActivityAt)}
         </p>
       </div>
-      <Link href={contextHref(`/lesson/${lesson.id}`, session.learnerId)} className={buttonClass("primary", "lg")}>
+      {/* Live lesson is another product area; for now this opens a placeholder. */}
+      <Link href={contextHref("/live", session.learnerId, { lesson: lesson.id })} className={buttonClass("primary", "lg")}>
         <Play size={18} strokeWidth={2} aria-hidden />
         Продолжить урок
       </Link>
     </div>
   );
 }
-
-const targetLabel: Record<HomeworkAssignment["targetType"], string> = {
-  lesson: "Весь урок",
-  section: "Раздел урока",
-  exercise: "Упражнение",
-};
 
 const statusActions: Record<HomeworkStatus, { to: HomeworkStatus; label: string; icon: React.ReactNode }[]> = {
   assigned: [
@@ -81,91 +74,52 @@ const statusToast: Record<HomeworkStatus, string> = {
   reviewed: "Отмечено как проверенное",
 };
 
-/** Spec §10.3: title, related lesson, assignment date, status, completion date. No deadlines. */
-export function HomeworkCard({ homework }: { homework: HomeworkAssignment }) {
-  const data = useStore((s) => s.data);
+/** Homework status in the lesson header; the badge opens the status actions. */
+export function HomeworkStatusMenu({ homework }: { homework: HomeworkAssignment }) {
   const setHomeworkStatus = useStore((s) => s.setHomeworkStatus);
-  const router = useRouter();
-  const context = lessonOfLearnerLesson(data, homework.learnerLessonId);
-  const lessonHref = context && contextHref(`/lesson/${context.lesson.id}`, homework.learnerId);
-
-  const items: MenuItem[] = statusActions[homework.status].map((action) => ({
-    label: action.label,
-    icon: action.icon,
-    onSelect: () => {
-      setHomeworkStatus(homework.id, action.to);
-      toast(statusToast[action.to]);
-    },
-  }));
-
   return (
-    <article className="group relative flex flex-col gap-3 rounded-lg border border-line bg-surface p-4 transition-colors duration-[120ms] hover:border-line-strong">
-      <div className="flex items-start justify-between gap-2">
-        <HomeworkStatusBadge status={homework.status} />
-        <Menu
-          items={
-            lessonHref
-              ? [...items, { label: "Открыть урок", icon: <ExternalLink {...iconProps} />, onSelect: () => router.push(lessonHref) }]
-              : items
-          }
-          trigger={(props) => (
-            <IconButton {...props} label={`Действия: ${homework.title}`} size="sm" className="relative z-10 -mt-1 -mr-1">
-              <Ellipsis size={20} strokeWidth={1.75} />
-            </IconButton>
-          )}
-        />
-      </div>
-      <div className="min-w-0">
-        {lessonHref ? (
-          <Link href={lessonHref} className="line-clamp-2 text-body-lg font-bold after:absolute after:inset-0 after:rounded-lg">
-            {homework.title}
-          </Link>
-        ) : (
-          <p className="line-clamp-2 text-body-lg font-bold">{homework.title}</p>
-        )}
-        <p className="mt-1 truncate text-ink-secondary">
-          {targetLabel[homework.targetType]}
-          {context && homework.targetType !== "lesson" ? ` · ${context.lesson.title}` : ""}
-          {context?.textbook ? ` · ${context.textbook.title}` : ""}
-        </p>
-      </div>
-      <dl className="mt-auto grid gap-0.5 text-caption text-ink-secondary">
-        <div className="flex gap-1">
-          <dt>Назначено</dt>
-          <dd>{formatDate(homework.assignedAt)}</dd>
-        </div>
-        {homework.completedAt && (
-          <div className="flex gap-1">
-            <dt>Выполнено</dt>
-            <dd>{formatDate(homework.completedAt)}</dd>
-          </div>
-        )}
-        {homework.reviewedAt && (
-          <div className="flex gap-1">
-            <dt>Проверено</dt>
-            <dd>{formatDate(homework.reviewedAt)}</dd>
-          </div>
-        )}
-      </dl>
-    </article>
+    <Menu
+      align="left"
+      items={statusActions[homework.status].map((action) => ({
+        label: action.label,
+        icon: action.icon,
+        onSelect: () => {
+          setHomeworkStatus(homework.id, action.to);
+          toast(statusToast[action.to]);
+        },
+      }))}
+      trigger={(props) => (
+        <button
+          {...props}
+          type="button"
+          title={homework.title}
+          aria-label={`${homeworkChipLabel[homework.status]}: ${homework.title}`}
+          className="flex items-center gap-1.5 rounded-xs transition-opacity duration-[120ms] hover:opacity-80"
+        >
+          <HomeworkChip status={homework.status} />
+          <ChevronDown size={16} strokeWidth={1.75} className="text-ink-secondary" aria-hidden />
+        </button>
+      )}
+    />
   );
 }
 
-/** Spec §9: lesson, textbook, last activity, status. Opens the learner's own lesson. */
-export function HistoryCard({ entry, learnerId }: { entry: HistoryEntry; learnerId: string }) {
+/** One lesson in the learner's history: lesson status before the title, homework after it. */
+export function HistoryChip({ entry, learnerId }: { entry: HistoryEntry; learnerId: string }) {
+  const labels = [
+    entry.status && lessonStatus[entry.status].label,
+    entry.homework && homeworkChipLabel[entry.homework],
+  ].filter(Boolean);
   return (
-    <article className="group relative flex flex-col gap-3 rounded-lg border border-line bg-surface p-4 transition-colors duration-[120ms] hover:border-line-strong">
-      <LessonStatusBadge status={entry.status} />
-      <div className="min-w-0">
-        <Link
-          href={contextHref(`/lesson/${entry.lesson.id}`, learnerId)}
-          className="line-clamp-2 text-body-lg font-bold after:absolute after:inset-0 after:rounded-lg"
-        >
-          {entry.lesson.title}
-        </Link>
-        <p className="mt-1 truncate text-ink-secondary">{entry.textbook?.title ?? "Отдельный урок"}</p>
-      </div>
-      <p className="mt-auto text-caption text-ink-secondary">{formatDate(entry.lastActivityAt)}</p>
-    </article>
+    <Link
+      href={contextHref(`/lesson/${entry.lesson.id}`, learnerId)}
+      title={[entry.lesson.title, ...labels].join(" · ")}
+      className="inline-flex h-10 max-w-full items-center gap-2 rounded-full border border-line bg-surface px-4 font-semibold text-ink transition-colors duration-[120ms] hover:border-line-strong hover:bg-hover has-[svg:first-child]:pl-3 has-[svg:last-child]:pr-3"
+    >
+      {entry.status && <LessonStatusIcon status={entry.status} />}
+      <span className="truncate">{entry.lesson.title}</span>
+      {labels.length > 0 && <span className="sr-only">{labels.join(", ")}</span>}
+      {entry.homework && <HomeworkRing status={entry.homework} />}
+    </Link>
   );
 }

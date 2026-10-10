@@ -50,7 +50,23 @@ const folders = [
   { id: "fld_publishers", name: "Учебники издательств", parentFolderId: null },
   { id: "fld_grammar", name: "Грамматика", parentFolderId: null },
   { id: "fld_speaking", name: "Разговорная практика", parentFolderId: null },
+  { id: "fld_vocabulary", name: "Лексика", parentFolderId: null },
+  { id: "fld_exams", name: "Подготовка к экзаменам", parentFolderId: null },
 ];
+
+/** [id, title, theory, exercise title, exercise] — a short two-block lesson. */
+type LessonSpec = [id: string, title: string, theory: string, exerciseTitle: string, task: string];
+
+function simpleLesson(
+  [id, title, theory, exerciseTitle, task]: LessonSpec,
+  opts: { textbookId?: string; folderId?: string; cover?: AccentColor } = {},
+): Lesson {
+  const key = id.replace(/^les_/, "");
+  return lesson(id, title, [
+    text(`blk_${key}_1`, "Теория", theory),
+    exercise(`blk_${key}_2`, `Упражнение 1. ${exerciseTitle}`, task),
+  ], opts);
+}
 
 // ───────────── Textbook lessons ─────────────
 
@@ -133,6 +149,49 @@ const textbookLessons: Lesson[] = [
   ], { textbookId: gpa }),
 ];
 
+const efi = "tb_ef_intermediate";
+const otc = "tb_outcomes";
+const viu = "tb_vocab_b1";
+const ilt = "tb_ielts";
+const phv = "tb_phrasal";
+
+const moreTextbookLessons: Lesson[] = [
+  ...([
+    ["les_present_tenses_review", "Present Tenses Review", "Present Simple vs Continuous: I usually cook, but today I'm ordering in.", "Выберите время", "I ___ (not / eat) meat. Look, he ___ (eat) my sandwich!"],
+    ["les_future_forms", "Future Forms", "will, going to, Present Continuous для планов.", "Планы и прогнозы", "Расскажите о планах на следующую неделю тремя способами."],
+    ["les_present_perfect_cont", "Present Perfect Continuous", "I've been saving for a year.", "Как долго?", "How long have you been learning English?"],
+    ["les_money_vocab", "Money Vocabulary", "borrow, lend, owe, afford, save up, a loan", "Диалог в банке", "Попросите в банке кредит на учёбу."],
+    ["les_transport", "Getting Around", "commute, rush hour, traffic jam, give someone a lift", "Мой путь на работу", "Опишите свою дорогу на работу или учёбу."],
+    ["les_used_to", "Used to and Would", "I used to live in Kazan. We would play outside all day.", "Детство", "Пять вещей, которые вы делали в детстве."],
+  ] as LessonSpec[]).map((spec) => simpleLesson(spec, { textbookId: efi })),
+  ...([
+    ["les_film_reviews", "Talking About Films", "plot, cast, it's set in, it's based on", "Рецензия", "Расскажите о фильме, который недавно посмотрели."],
+    ["les_habits", "Habits in the Past", "used to, would, kept + -ing", "Привычки", "Какие привычки вы бросили и почему?"],
+    ["les_relative_clauses", "Relative Clauses", "who, which, that, where, whose", "Соедините предложения", "This is the café. We met there. → This is the café where…"],
+    ["les_making_recommendations", "Making Recommendations", "You should definitely… It's worth visiting…", "Гид по городу", "Порекомендуйте три места в своём городе."],
+    ["les_third_conditional", "Third Conditional", "If I had known, I would have come.", "Сожаления", "Закончите: If I hadn't missed the bus, …"],
+  ] as LessonSpec[]).map((spec) => simpleLesson(spec, { textbookId: otc })),
+  ...([
+    ["les_describing_character", "Describing Character", "reliable, outgoing, stubborn, easy-going", "Портрет друга", "Опишите характер близкого друга."],
+    ["les_relationships", "Relationships", "get on with, fall out, make up, a close friend", "Истории", "Расскажите о ссоре и примирении."],
+    ["les_jobs", "Jobs and Careers", "apply for, be promoted, retire, a career path", "Карьера", "Опишите карьеру человека, которым вы восхищаетесь."],
+    ["les_office", "In the Office", "deadline, a meeting room, a printer jam, working hours", "Рабочий день", "Опишите типичный день в офисе."],
+    ["les_city_life", "City Life", "crowded, lively, polluted, a suburb, nightlife", "Город или деревня", "Где лучше жить и почему?"],
+  ] as LessonSpec[]).map((spec) => simpleLesson(spec, { textbookId: viu })),
+  ...([
+    ["les_ielts_part1", "Part 1: Familiar Topics", "Короткие ответы с одной деталью: I'm a student, actually I study law.", "Вопросы о себе", "Ответьте на 6 вопросов о работе и доме."],
+    ["les_ielts_part2", "Part 2: Long Turn", "1 минута на подготовку, 2 минуты речи по карточке.", "Карточка", "Describe a place you like to visit."],
+    ["les_ielts_part3", "Part 3: Discussion", "Обобщения, сравнения, примеры: In general… whereas…", "Дискуссия", "Should tourism be limited in popular cities?"],
+    ["les_ielts_fluency", "Fluency and Linking", "Связки: on top of that, having said that, as a result", "Связная речь", "Перескажите новость, используя 5 связок."],
+  ] as LessonSpec[]).map((spec) => simpleLesson(spec, { textbookId: ilt })),
+  ...([
+    ["les_pv_travel", "Phrasal Verbs: Travel", "set off, check in, get away, look around", "Отпуск", "Расскажите о поездке, используя 4 фразовых глагола."],
+    ["les_pv_work", "Phrasal Verbs: Work", "carry out, deal with, take on, set up", "Задачи", "Опишите проект, используя фразовые глаголы."],
+    ["les_pv_relationships", "Phrasal Verbs: Relationships", "get along, break up, look up to, ask out", "Сериал", "Перескажите сюжет любимого сериала."],
+    ["les_pv_everyday", "Phrasal Verbs: Everyday Life", "wake up, turn off, run out of, tidy up", "Утро", "Опишите своё утро."],
+  ] as LessonSpec[]).map((spec) => simpleLesson(spec, { textbookId: phv })),
+];
+
 const textbooks: Textbook[] = [
   {
     id: efe,
@@ -195,6 +254,67 @@ const textbooks: Textbook[] = [
     cover: "pink",
     updatedAt: at("2026-09-01"),
   },
+  {
+    id: efi,
+    title: "English File Intermediate",
+    folderId: "fld_publishers",
+    sections: [
+      { id: "sec_efi_1", title: "Unit 1 — Mood Food", order: 0,
+        lessonIds: ["les_present_tenses_review", "les_future_forms"] },
+      { id: "sec_efi_2", title: "Unit 2 — Money", order: 1,
+        lessonIds: ["les_present_perfect_cont", "les_money_vocab"] },
+      { id: "sec_efi_3", title: "Unit 3 — Transport", order: 2,
+        lessonIds: ["les_transport", "les_used_to"] },
+    ],
+    looseLessonIds: [],
+    cover: "green",
+    updatedAt: at("2026-09-01"),
+  },
+  {
+    id: otc,
+    title: "Outcomes Upper-Intermediate",
+    folderId: "fld_publishers",
+    sections: [
+      { id: "sec_otc_1", title: "Unit 1 — Entertainment", order: 0,
+        lessonIds: ["les_film_reviews", "les_habits"] },
+      { id: "sec_otc_2", title: "Unit 2 — Sightseeing", order: 1,
+        lessonIds: ["les_relative_clauses", "les_making_recommendations"] },
+    ],
+    looseLessonIds: ["les_third_conditional"],
+    cover: "coral",
+    updatedAt: at("2026-09-01"),
+  },
+  {
+    id: viu,
+    title: "Vocabulary in Use B1",
+    folderId: "fld_vocabulary",
+    sections: [
+      { id: "sec_viu_1", title: "Люди", order: 0, lessonIds: ["les_describing_character", "les_relationships"] },
+      { id: "sec_viu_2", title: "Работа", order: 1, lessonIds: ["les_jobs", "les_office"] },
+      { id: "sec_viu_3", title: "Город", order: 2, lessonIds: ["les_city_life"] },
+    ],
+    looseLessonIds: [],
+    cover: "yellow",
+    updatedAt: at("2026-09-01"),
+  },
+  {
+    id: ilt,
+    title: "IELTS Speaking",
+    folderId: "fld_exams",
+    sections: [],
+    looseLessonIds: ["les_ielts_part1", "les_ielts_part2", "les_ielts_part3", "les_ielts_fluency"],
+    cover: "violet",
+    updatedAt: at("2026-09-01"),
+  },
+  {
+    id: phv,
+    title: "Phrasal Verbs in Context",
+    folderId: null,
+    sections: [],
+    looseLessonIds: ["les_pv_travel", "les_pv_work", "les_pv_relationships", "les_pv_everyday"],
+    cover: "blue",
+    updatedAt: at("2026-09-01"),
+  },
 ];
 
 // ───────────── Standalone lessons ─────────────
@@ -232,9 +352,25 @@ const standaloneLessons: Lesson[] = [
     text("blk_cd_1", "Правило", "If you heat ice, it melts. If it rains, I'll stay home."),
     exercise("blk_cd_2", "Упражнение 1. Закончите", "If I have time tomorrow, …"),
   ], { folderId: "fld_grammar" }),
+
+  simpleLesson(["les_small_talk", "Small Talk at Work", "How was your weekend? Busy day?", "Кофе-брейк", "Поддержите разговор с коллегой 2 минуты."], { cover: "pink" }),
+  simpleLesson(["les_directions", "Giving Directions", "go straight on, take the second left, opposite", "Как пройти", "Объясните дорогу от метро до вашего дома."]),
+  simpleLesson(["les_shopping", "Shopping and Prices", "How much is it? Can I try it on? a receipt", "В магазине", "Верните покупку и попросите обмен."], { cover: "orange" }),
+  simpleLesson(["les_restaurant", "At the Restaurant", "Could we have the bill? I'd like… Is service included?", "Заказ", "Закажите ужин на троих."]),
+
+  simpleLesson(["les_modals", "Modal Verbs of Obligation", "must, have to, don't have to, mustn't", "Правила", "Правила вашей работы: must / have to / mustn't."], { folderId: "fld_grammar" }),
+  simpleLesson(["les_comparatives", "Comparatives and Superlatives", "bigger, more expensive, the best, as… as", "Сравните", "Сравните два города, в которых вы были."], { folderId: "fld_grammar", cover: "violet" }),
+  simpleLesson(["les_reported_speech", "Reported Speech", "She said (that) she was tired.", "Перескажите", "Перескажите вчерашний разговор с другом."], { folderId: "fld_grammar" }),
+  simpleLesson(["les_second_conditional", "Second Conditional", "If I won the lottery, I would travel.", "Мечты", "What would you do if you didn't have to work?"], { folderId: "fld_grammar" }),
+
+  simpleLesson(["les_debate_remote", "Debate: Remote Work", "I'd argue that… On the other hand… That's a fair point, but…", "Дебаты", "Аргументы за и против удалённой работы."], { folderId: "fld_speaking", cover: "teal" }),
+  simpleLesson(["les_describing_people", "Describing People", "tall, curly hair, in his thirties, looks like", "Кто это?", "Опишите человека на фото — собеседник угадывает."], { folderId: "fld_speaking" }),
+
+  simpleLesson(["les_time_idioms", "Idioms About Time", "in the nick of time, kill time, call it a day", "Идиомы в речи", "Составьте историю с тремя идиомами."], { folderId: "fld_vocabulary" }),
+  simpleLesson(["les_make_do", "Make and Do", "make a decision, do homework, make a mistake, do the shopping", "Make или do?", "___ a cake, ___ your best, ___ a phone call"], { folderId: "fld_vocabulary", cover: "green" }),
 ];
 
-const lessons = [...textbookLessons, ...standaloneLessons];
+const lessons = [...textbookLessons, ...moreTextbookLessons, ...standaloneLessons];
 const lessonById = (id: string) => lessons.find((l) => l.id === id)!;
 
 // ───────────── Learner versions, sessions, homework ─────────────
@@ -367,22 +503,127 @@ const homeworkAssignments: HomeworkAssignment[] = [
   homework("hw_b1_nt", "group_b1", "ll_b1_nt", "blk_nt_2", at("2026-10-05", "20:30"), "assigned"),
 ];
 
+// ───────────── Long histories ─────────────
+// Anna, Maxim and Group B1 have studied for months: 20+ finished lessons each,
+// with homework in every state. Generated going back in time from `before`.
+
+const day = (date: string, offset: number) => {
+  const d = new Date(`${date}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + offset);
+  return d.toISOString().slice(0, 10);
+};
+
+type HomeworkPlan = HomeworkAssignment["status"] | null;
+
+/** Mostly reviewed; a few lessons without homework; recent ones still open. */
+function homeworkPlan(i: number, offset: number): HomeworkPlan {
+  if (i === 0) return "completed";
+  if (i === 1) return "assigned";
+  if ((i + offset) % 5 === 0) return null;
+  if ((i + offset) % 7 === 3) return "completed";
+  return "reviewed";
+}
+
+function longHistory(learnerId: string, time: string, before: string, lessonIds: string[], offset = 0) {
+  const result = { learnerLessons: [] as LearnerLesson[], sessions: [] as LessonSession[], homework: [] as HomeworkAssignment[] };
+  lessonIds.forEach((lessonId, i) => {
+    const key = `${learnerId}_${lessonId.replace(/^les_/, "")}`;
+    const date = day(before, -(i * 3 + 1 + (i % 2)));
+    const start = at(date, time);
+    const end = at(date, `${String(Number(time.slice(0, 2)) + 1).padStart(2, "0")}${time.slice(2)}`);
+    const ll = learnerCopy(`ll_${key}`, learnerId, lessonId, start);
+    result.learnerLessons.push(ll);
+    result.sessions.push(session(`ses_${key}`, learnerId, ll.id, start, end));
+
+    const status = homeworkPlan(i, offset);
+    if (!status) return;
+    const block = ll.content.blocks.find((b) => b.type === "exercise") ?? null;
+    result.homework.push({
+      id: `hw_${key}`,
+      learnerId,
+      learnerLessonId: ll.id,
+      title: block ? block.title : lessonById(lessonId).title,
+      targetType: block ? "exercise" : "lesson",
+      targetId: block ? block.id : ll.id,
+      snapshot: structuredClone(block ? [block] : ll.content.blocks),
+      status,
+      assignedAt: end,
+      completedAt: status === "assigned" ? null : at(day(date, 2), "19:00"),
+      reviewedAt: status === "reviewed" ? at(day(date, 3), "09:00") : null,
+    });
+  });
+  return result;
+}
+
+const longHistories = [
+  longHistory("anna", "15:00", "2026-10-01", [
+    "les_present_continuous", "les_countable", "les_past_continuous", "les_present_tenses_review",
+    "les_future_forms", "les_present_perfect_cont", "les_money_vocab", "les_transport", "les_used_to",
+    "les_hobbies", "les_travel", "les_phone_calls", "les_everyday_vocab", "les_small_talk",
+    "les_directions", "les_shopping", "les_restaurant", "les_modals", "les_comparatives",
+    "les_describing_people", "les_pv_travel", "les_pv_everyday", "les_time_idioms",
+  ]),
+  longHistory("maxim", "18:00", "2026-10-06", [
+    "les_meetings", "les_emails", "les_job_interview", "les_small_talk", "les_phone_calls",
+    "les_office", "les_jobs", "les_pv_work", "les_debate_remote", "les_making_recommendations",
+    "les_relative_clauses", "les_reported_speech", "les_second_conditional", "les_conditionals",
+    "les_passive_voice", "les_film_reviews", "les_habits", "les_third_conditional",
+    "les_describing_character", "les_relationships", "les_ielts_part1", "les_ielts_part2",
+  ], 2),
+  longHistory("group_b1", "19:00", "2026-09-30", [
+    "les_ielts_part1", "les_ielts_part2", "les_ielts_part3", "les_ielts_fluency", "les_film_reviews",
+    "les_habits", "les_relative_clauses", "les_making_recommendations", "les_third_conditional",
+    "les_city_life", "les_relationships", "les_describing_character", "les_jobs", "les_time_idioms",
+    "les_make_do", "les_pv_relationships", "les_pv_work", "les_reported_speech", "les_modals",
+    "les_debate_remote", "les_present_perfect", "les_going_to",
+  ], 4),
+];
+
 // ───────────── Learners ─────────────
 
+type Student = Omit<AppData["learners"][number], "type">;
+const student = (s: Student): AppData["learners"][number] => ({ type: "individual", ...s });
+
+// Order matters: the learner strip shows the first ones, the rest go to «Ещё».
 const learners: AppData["learners"] = [
-  { id: "anna", name: "Анна Кузнецова", type: "individual", avatarColor: "pink" },
-  { id: "maxim", name: "Максим Лебедев", type: "individual", avatarColor: "orange" },
-  { id: "sofia", name: "София Ким", type: "individual", avatarColor: "teal" },
-  { id: "pasha", name: "Паша", type: "individual", avatarColor: "violet" },
+  student({ id: "anna", name: "Анна Кузнецова", avatarColor: "pink",
+    email: "anna.kuznetsova@mail.ru", schedule: ["Понедельник, 17:00", "Четверг, 18:30"], lessonsLeft: 6 }),
+  student({ id: "maxim", name: "Максим Лебедев", avatarColor: "orange",
+    email: "m.lebedev@gmail.com", schedule: ["Вторник, 08:00", "Пятница, 08:00"], lessonsLeft: 3 }),
+  student({ id: "sofia", name: "София Ким", avatarColor: "teal",
+    email: "sofia.kim@yandex.ru", schedule: ["Среда, 12:00"], lessonsLeft: 8 }),
+  student({ id: "pasha", name: "Паша", avatarColor: "violet", avatarUrl: "/avatars/pasha.svg",
+    email: "pasha2012@mail.ru", invitePending: true, schedule: ["Суббота, 11:00"], lessonsLeft: 4 }),
   { id: "group_a2", name: "Группа A2", type: "group", avatarColor: "green",
-    members: ["Ирина Соколова", "Тимур Алиев", "Вера Новикова"] },
+    memberIds: ["irina", "timur", "vera", "artem"] },
   { id: "group_b1", name: "Группа B1", type: "group", avatarColor: "blue",
-    members: ["Ольга Петрова", "Денис Морозов", "Лиза Фёдорова", "Артур Ким"] },
-  { id: "elena", name: "Елена Миронова", type: "individual", avatarColor: "yellow" },
-  { id: "dmitry", name: "Дмитрий Орлов", type: "individual", avatarColor: "coral" },
-  { id: "kseniya", name: "Ксения Белова", type: "individual", avatarColor: "pink" },
-  { id: "artem", name: "Артём Власов", type: "individual", avatarColor: "teal" },
-  { id: "polina", name: "Полина Зайцева", type: "individual", avatarColor: "violet" },
+    memberIds: ["olga", "denis", "liza", "artur", "kseniya"] },
+  student({ id: "elena", name: "Елена Миронова", avatarColor: "yellow",
+    email: "elena.mironova@gmail.com", invitePending: true, schedule: ["Понедельник, 10:00"], lessonsLeft: 10 }),
+  student({ id: "dmitry", name: "Дмитрий Орлов", avatarColor: "coral",
+    email: "d.orlov@outlook.com", schedule: ["Четверг, 20:00"], lessonsLeft: 2 }),
+  // Ксения and Артём also study in a group; Ксения has a one-to-one history too.
+  student({ id: "kseniya", name: "Ксения Белова", avatarColor: "pink",
+    email: "ksenia.belova@mail.ru", schedule: ["Вторник, 19:00", "Суббота, 10:00"], lessonsLeft: 5 }),
+  student({ id: "artem", name: "Артём Власов", avatarColor: "teal",
+    email: "artem.vlasov@gmail.com", invitePending: true, schedule: ["Среда, 18:00", "Пятница, 19:00"], lessonsLeft: 7 }),
+  student({ id: "polina", name: "Полина Зайцева", avatarColor: "violet",
+    email: "polina.z@yandex.ru", schedule: ["Пятница, 16:00"], lessonsLeft: 1 }),
+  // Students who so far have only studied in a group.
+  student({ id: "irina", name: "Ирина Соколова", avatarColor: "coral",
+    email: "irina.sokolova@mail.ru", invitePending: true, schedule: ["Пятница, 19:00"], lessonsLeft: 8 }),
+  student({ id: "timur", name: "Тимур Алиев", avatarColor: "blue",
+    email: "timur.aliev@gmail.com", schedule: ["Пятница, 19:00"], lessonsLeft: 8 }),
+  student({ id: "vera", name: "Вера Новикова", avatarColor: "yellow",
+    email: "vera.novikova@yandex.ru", schedule: ["Пятница, 19:00"], lessonsLeft: 4 }),
+  student({ id: "olga", name: "Ольга Петрова", avatarColor: "green",
+    email: "olga.petrova@mail.ru", schedule: ["Вторник, 19:00"], lessonsLeft: 6 }),
+  student({ id: "denis", name: "Денис Морозов", avatarColor: "orange",
+    email: "denis.morozov@gmail.com", invitePending: true, schedule: ["Вторник, 19:00"], lessonsLeft: 6 }),
+  student({ id: "liza", name: "Лиза Фёдорова", avatarColor: "violet",
+    email: "liza.fedorova@yandex.ru", schedule: ["Вторник, 19:00"], lessonsLeft: 3 }),
+  student({ id: "artur", name: "Артур Ким", avatarColor: "teal",
+    email: "artur.kim@mail.ru", schedule: ["Вторник, 19:00"], lessonsLeft: 9 }),
 ];
 
 export function createDemoData(): AppData {
@@ -392,8 +633,8 @@ export function createDemoData(): AppData {
     folders,
     textbooks,
     lessons,
-    learnerLessons,
-    sessions,
-    homework: homeworkAssignments,
+    learnerLessons: [...learnerLessons, ...longHistories.flatMap((h) => h.learnerLessons)],
+    sessions: [...sessions, ...longHistories.flatMap((h) => h.sessions)],
+    homework: [...homeworkAssignments, ...longHistories.flatMap((h) => h.homework)],
   });
 }

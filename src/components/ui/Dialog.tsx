@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, Info } from "lucide-react";
-import { Button } from "./Button";
+import { AlertTriangle, Info, X } from "lucide-react";
+import { Button, IconButton } from "./Button";
 
 interface DialogProps {
   open: boolean;
@@ -11,13 +11,15 @@ interface DialogProps {
   children?: ReactNode;
   footer?: ReactNode;
   icon?: ReactNode;
+  /** Wide dialogs browse content (e.g. full history) and get a close button. */
+  wide?: boolean;
 }
 
 /**
  * UI kit · Оверлеи: modal for a short, complete task. Native <dialog> gives
  * focus containment and Escape-to-close; focus returns to the opener on close.
  */
-export function Dialog({ open, onClose, title, children, footer, icon }: DialogProps) {
+export function Dialog({ open, onClose, title, children, footer, icon, wide = false }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
@@ -34,7 +36,7 @@ export function Dialog({ open, onClose, title, children, footer, icon }: DialogP
       onClose={onClose}
       onClick={(e) => e.target === ref.current && onClose()}
       aria-labelledby={titleId}
-      className="m-auto w-[min(92vw,480px)] rounded-lg bg-surface p-0 text-ink shadow-3 backdrop:bg-neutral-950/40"
+      className={`m-auto ${wide ? "w-[min(92vw,760px)]" : "w-[min(92vw,480px)]"} rounded-lg bg-surface p-0 text-ink shadow-3 backdrop:bg-neutral-950/40`}
     >
       {open && (
         <div className="p-6">
@@ -44,8 +46,13 @@ export function Dialog({ open, onClose, title, children, footer, icon }: DialogP
               <h2 id={titleId} className="text-h3">
                 {title}
               </h2>
-              {children && <div className="mt-2 text-ink-secondary">{children}</div>}
+              {children && <div className={wide ? "mt-4" : "mt-2 text-ink-secondary"}>{children}</div>}
             </div>
+            {wide && (
+              <IconButton label="Закрыть" size="sm" onClick={onClose} className="-mt-1 -mr-2">
+                <X size={20} strokeWidth={1.75} />
+              </IconButton>
+            )}
           </div>
           {footer && <div className="mt-6 flex justify-end gap-2">{footer}</div>}
         </div>

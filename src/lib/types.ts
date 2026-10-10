@@ -20,7 +20,17 @@ export interface Learner {
   name: string;
   type: "individual" | "group";
   avatarColor: AccentColor;
-  members?: string[];
+  /** Groups: their students. Each member is also a learner of type "individual". */
+  memberIds?: string[];
+  /** Uploaded photo or picture; initials are shown without one. */
+  avatarUrl?: string;
+  email?: string;
+  /** Hasn't joined Planeree yet: the profile offers to send an invite. */
+  invitePending?: boolean;
+  /** Placeholder until the CRM sync: «Понедельник, 17:00». */
+  schedule?: string[];
+  /** Placeholder until the CRM sync. */
+  lessonsLeft?: number;
 }
 
 export interface Folder {
@@ -122,7 +132,6 @@ export interface AppData {
 
 /** Why a requested change was refused. The UI maps these to Russian messages. */
 export type BlockReason =
-  | "folder_not_empty"
   | "has_learner_activity"
   | "not_found";
 

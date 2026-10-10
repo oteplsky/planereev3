@@ -4,7 +4,7 @@ import { Check, Folder as FolderIcon, LibraryBig } from "lucide-react";
 import { ConfirmDialog, Dialog, NoticeDialog, PromptDialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui/Toast";
-import { deleteBlockReason, folderPath } from "@/lib/domain";
+import { deleteBlockReason, folderItemCount, folderPath } from "@/lib/domain";
 import { blockMessages } from "@/lib/messages";
 import { useStore } from "@/lib/store";
 import type { AppData, BlockReason } from "@/lib/types";
@@ -84,13 +84,21 @@ export function LibraryDialogs({ state, onClose, folderId, onDeleted }: LibraryD
 
       <ConfirmDialog
         open={state?.type === "delete"}
-        title={state?.type === "delete" ? `Удалить «${state.target.title}»?` : ""}
-        description={
-          state?.type === "delete" && state.target.kind === "textbook"
-            ? "Учебник удалится вместе со всеми уроками. Это действие нельзя отменить."
-            : "Это действие нельзя отменить."
+        title={
+          state?.type !== "delete" ? "" : state.target.kind === "folder" ? "Удалить папку?" : `Удалить «${state.target.title}»?`
         }
-        confirmLabel="Удалить"
+        description={
+          state?.type !== "delete"
+            ? undefined
+            : state.target.kind === "folder"
+              ? folderItemCount(store.data, state.target.id) > 0
+                ? "Папка будет удалена, а находящиеся в ней материалы автоматически переместятся в раздел «Библиотека»."
+                : undefined
+              : state.target.kind === "textbook"
+                ? "Учебник удалится вместе со всеми уроками. Это действие нельзя отменить."
+                : "Это действие нельзя отменить."
+        }
+        confirmLabel={state?.type === "delete" && state.target.kind === "folder" ? "Удалить папку" : "Удалить"}
         onClose={onClose}
         onConfirm={() => {
           if (state?.type !== "delete") return;
@@ -98,7 +106,7 @@ export function LibraryDialogs({ state, onClose, folderId, onDeleted }: LibraryD
           const result =
             target.kind === "folder" ? store.deleteFolder(target.id) : store.deleteMaterial(target.kind, target.id);
           if (!result.ok) return;
-          toast("Удалено");
+          toast(target.kind === "folder" ? "Папка удалена" : "Удалено");
           onDeleted?.(target);
         }}
       />

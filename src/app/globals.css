@@ -165,6 +165,13 @@
   }
 }
 
+/* Live lesson placeholder: the ribbon is laid only part of the way. */
+@keyframes ribbon-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;

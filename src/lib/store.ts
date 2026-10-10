@@ -17,7 +17,7 @@ import type {
 
 const STORAGE_KEY = "planeree-library";
 /** Bump when the data shape changes; stored data from older versions is replaced by demo data. */
-const STORAGE_VERSION = 2;
+const STORAGE_VERSION = 4;
 
 const now = () => new Date().toISOString();
 
@@ -71,6 +71,10 @@ interface Store {
   assignHomework(learnerId: string, lessonId: string, target: d.HomeworkTarget): string;
   setHomeworkStatus(homeworkId: string, status: HomeworkStatus): void;
 
+  // Groups
+  addGroupMembers(groupId: string, learnerIds: string[]): void;
+  removeGroupMember(groupId: string, learnerId: string): void;
+
   resetDemoData(): void;
 }
 
@@ -110,6 +114,8 @@ export const useStore = create<Store>()(
         renameMaterial: (kind, id, title) =>
           commit(d.renameMaterial(data(), kind, id, title, now())),
         moveMaterial: (kind, id, folderId) => commit(d.moveMaterial(data(), kind, id, folderId)),
+        addGroupMembers: (groupId, learnerIds) => commit(d.addGroupMembers(data(), groupId, learnerIds)),
+        removeGroupMember: (groupId, learnerId) => commit(d.removeGroupMember(data(), groupId, learnerId)),
         setCover: (kind, id, cover) => commit(d.setCover(data(), kind, id, cover)),
         duplicateMaterial(kind, id) {
           if (kind === "lesson") {

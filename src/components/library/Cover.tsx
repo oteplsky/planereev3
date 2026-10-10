@@ -16,6 +16,25 @@ const ribbonSoft: Record<AccentColor, string> = {
   green: "text-green-bg", teal: "text-teal-bg", blue: "text-blue-bg", violet: "text-violet-bg",
 };
 
+// Pages behind a textbook cover: the same hue, fading back.
+const pageBg: Record<AccentColor, [back: string, middle: string]> = {
+  pink: ["bg-pink-softest", "bg-pink-bg"], coral: ["bg-coral-softest", "bg-coral-bg"],
+  orange: ["bg-orange-softest", "bg-orange-bg"], yellow: ["bg-yellow-softest", "bg-yellow-bg"],
+  green: ["bg-green-softest", "bg-green-bg"], teal: ["bg-teal-softest", "bg-teal-bg"],
+  blue: ["bg-blue-softest", "bg-blue-bg"], violet: ["bg-violet-softest", "bg-violet-bg"],
+};
+
+/** Two pages peeking above a textbook card, so it reads as a stack. Parent needs `relative pt-4`. */
+export function StackPages({ cover }: { cover: AccentColor | null }) {
+  const [back, middle] = cover ? pageBg[cover] : ["bg-neutral-100", "bg-neutral-200"];
+  return (
+    <>
+      <span aria-hidden className={`absolute inset-x-6 top-0 h-6 rounded-t-lg ${back}`} />
+      <span aria-hidden className={`absolute inset-x-3 top-2 h-6 rounded-t-lg ${middle}`} />
+    </>
+  );
+}
+
 interface CoverProps {
   cover: AccentColor | null;
   kind: "lesson" | "textbook";
@@ -23,17 +42,14 @@ interface CoverProps {
 
 /**
  * Card cover. With a colour: the brand ribbon with the lime dot (brand · Изображения).
- * Without: a quiet placeholder, as in the previous build.
+ * Without: a quiet placeholder with the material's icon.
  */
 export function Cover({ cover, kind }: CoverProps) {
   if (!cover) {
     const Icon = kind === "textbook" ? BookOpen : FileText;
     return (
       <div className="m-1.5 mb-0 grid aspect-[16/10] place-items-center rounded-md border border-dashed border-line-strong bg-light text-ink-secondary">
-        <div className="flex flex-col items-center gap-2">
-          <Icon size={28} strokeWidth={1.5} aria-hidden />
-          <span className="text-caption">Нет обложки</span>
-        </div>
+        <Icon size={28} strokeWidth={1.5} aria-hidden />
       </div>
     );
   }

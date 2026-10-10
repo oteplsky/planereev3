@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Copy, Ellipsis, FolderInput, Pencil, Plus, Trash2 } from "lucide-react";
+import { forwardRef, type ButtonHTMLAttributes } from "react";
+import { Copy, Ellipsis, FileText, FolderInput, Pencil, Plus, Trash2 } from "lucide-react";
 import { IconButton } from "@/components/ui/Button";
 import { Menu, type MenuItem } from "@/components/ui/Menu";
-import { Cover } from "./Cover";
+import { Cover, StackPages } from "./Cover";
+import { count, LESSONS } from "@/lib/format";
 import type { AccentColor } from "@/lib/types";
 
 const iconProps = { size: 18, strokeWidth: 1.75, "aria-hidden": true } as const;
@@ -71,18 +73,27 @@ export function FolderCard({ href, name, caption, actions }: FolderCardProps) {
   );
 }
 
-export function AddTile({ label, onClick, className = "mt-3 min-h-28" }: { label: string; onClick(): void; className?: string }) {
+interface AddTileProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  label: string;
+}
+
+/** Dashed «+» tile that opens a grid. Forwards its ref so it can be a menu trigger. */
+export const AddTile = forwardRef<HTMLButtonElement, AddTileProps>(function AddTile(
+  { label, className = "mt-3 min-h-28", ...props },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type="button"
-      onClick={onClick}
-      className={`${className} flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-strong font-semibold text-ink-secondary transition-colors duration-[120ms] hover:border-action hover:bg-selected hover:text-action`}
+      {...props}
+      className={`${className} flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-line-strong px-3 text-center font-semibold text-ink-secondary transition-colors duration-[120ms] hover:border-action hover:bg-selected hover:text-action aria-expanded:border-action aria-expanded:bg-selected aria-expanded:text-action`}
     >
       <Plus size={22} strokeWidth={1.75} aria-hidden />
       {label}
     </button>
   );
-}
+});
 
 interface MaterialCardProps {
   href: string;
@@ -94,24 +105,42 @@ interface MaterialCardProps {
   /** Shown before the title in compact cards, e.g. the lesson number. */
   leading?: React.ReactNode;
   badge?: React.ReactNode;
+  /** Textbooks: shown as a count on the cover. */
+  lessonCount?: number;
   actions?: CardActions;
 }
 
-/** UI kit · Карточки: white, 1px #EFEFEF outline, no shadow; outline darkens on hover. */
-export function MaterialCard({ href, kind, title, caption, cover, leading, badge, actions }: MaterialCardProps) {
+/**
+ * UI kit · Карточки: white, 1px #EFEFEF outline, no shadow; outline darkens on hover.
+ * Library cards (with a cover) reserve room on top so a textbook can show as a stack of pages.
+ */
+export function MaterialCard({ href, kind, title, caption, cover, leading, badge, lessonCount, actions }: MaterialCardProps) {
+  const hasCover = cover !== undefined;
+  const stacked = hasCover && kind === "textbook";
+
   return (
-    <div className="group relative flex flex-col rounded-lg border border-line bg-surface transition-colors duration-[120ms] hover:border-line-strong">
-      {cover !== undefined && <Cover cover={cover} kind={kind} />}
-      <div className={`flex gap-3 p-4 ${leading ? "items-center" : "items-start"}`}>
-        {leading}
-        <div className="min-w-0 flex-1">
-          <Link href={href} className="line-clamp-2 text-body-lg font-bold after:absolute after:inset-0 after:rounded-lg">
-            {title}
-          </Link>
-          {caption && <p className="mt-1 text-body text-ink-secondary">{caption}</p>}
-          {badge && <div className="mt-2">{badge}</div>}
+    <div className={`group relative flex flex-col ${hasCover ? "pt-4" : ""}`}>
+      {stacked && <StackPages cover={cover} />}
+      <div className="relative flex flex-1 flex-col rounded-lg border border-line bg-surface transition-colors duration-[120ms] group-hover:border-line-strong">
+        {hasCover && <Cover cover={cover} kind={kind} />}
+        {lessonCount !== undefined && (
+          <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 rounded-full bg-surface/90 px-2 py-0.5 text-caption font-semibold">
+            <FileText size={14} strokeWidth={2} aria-hidden />
+            <span aria-hidden>{lessonCount}</span>
+            <span className="sr-only">{count(lessonCount, LESSONS)}</span>
+          </span>
+        )}
+        <div className={`flex gap-3 p-4 ${leading ? "items-center" : "items-start"}`}>
+          {leading}
+          <div className="min-w-0 flex-1">
+            <Link href={href} className="line-clamp-2 text-body-lg font-bold after:absolute after:inset-0 after:rounded-lg">
+              {title}
+            </Link>
+            {caption && <p className="mt-1 text-body text-ink-secondary">{caption}</p>}
+            {badge && <div className="mt-2">{badge}</div>}
+          </div>
+          {actions && <ActionsMenu title={title} actions={actions} />}
         </div>
-        {actions && <ActionsMenu title={title} actions={actions} />}
       </div>
     </div>
   );

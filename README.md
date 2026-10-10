@@ -39,8 +39,8 @@ Browsing never creates one (`resolveLesson` is read-only). Once created, a learn
 is independent: later global edits don't reach it, and there is no sync or reset.
 The UI never says "copy" — it says «Общий материал» and «Версия для Анны».
 
-Deleting a folder, textbook, section or lesson is blocked (with an explanation) when it
-would lose learner history or isn't empty.
+Deleting a textbook, section or lesson is blocked (with an explanation) when it would lose
+learner history. Deleting a folder never deletes materials: its contents move to the library root.
 
 ## Where things are
 
@@ -58,9 +58,10 @@ src/components/
   ui/             UI kit primitives: Button, Menu, Dialog, Badge, SegmentedControl, …
   library/        The one Library component, shared by global and learner contexts
   textbook/       Textbook view with sections
-  learner/        Learner workspace, homework and history
+  learner/        Learner workspace: current lesson, lesson history chips with homework marks
   lesson/         Lesson placeholder: blocks, editor, homework dialog
-src/app/          Routes: /library, /textbook/[id], /lesson/[id], /homework, /history
+  live/           Placeholder for the live lesson (another product area)
+src/app/          Routes: /library, /textbook/[id], /lesson/[id], /live
 ```
 
 Context is part of the URL — `/library?learner=anna`, `/lesson/les_present_simple?learner=anna` —
@@ -70,13 +71,15 @@ so refresh and links keep it. No `learner` means the global library.
 
 | Scenario | Try this |
 |---|---|
-| Global content | «Библиотека» → «+ Создать», folders, ⋯ menus; open a textbook to manage sections |
+| Global content | «Библиотека» → the «+» tiles at the start of Папки and Материалы, ⋯ menus; open a textbook to manage sections |
 | Learner navigation | Switch Библиотека → Анна → Максим in the top strip |
 | Personalized lesson | Анна → English File Elementary → Present Simple → «Адаптировать урок» → add an exercise → save. Open the same lesson for Максим: it isn't there |
 | Global edits don't propagate | Библиотека → Present Simple → «Редактировать» → change a block. Анна keeps hers; Максим sees the change |
-| History | София → any lesson → «Начать урок» → «Завершить урок» → it appears in «История уроков» |
-| Resume | Анна → «Продолжить урок» |
-| Homework | Максим → lesson → «Назначить домашку»; change status from the card's ⋯ menu |
+| History | София → any lesson → «Начать индивидуальный урок» → «Завершить урок» → it appears as a chip in «История уроков» |
+| Live lesson (not built) | Анна → «Продолжить урок» opens a «пока строится» page; live lessons belong to another product area |
+| Homework | Максим → lesson → «Назначить домашку»; the lesson's chip gets a homework mark. Change status from the badge in the lesson header |
+| Student profile | Click a student's name (e.g. Паша, with a picture avatar) → profile panel: email, schedule, balance, notes |
+| Groups | Группа B1 → its students → Ксения: «Индивидуально» is her page's context, «Группа B1» leads back to the group («Начать урок с группой») |
 
 **Reset demo data:** run `localStorage.removeItem("planeree-library")` in the browser console
 and reload. Changing the data shape? Bump `STORAGE_VERSION` in `store.ts`; older saved data is

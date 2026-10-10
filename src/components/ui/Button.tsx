@@ -69,3 +69,18 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
     </button>
   );
 });
+
+/** Text button: a secondary action that reads as a link. One style for every text button. */
+export const textButtonClass =
+  "inline-flex w-max items-center gap-1.5 rounded-xs font-semibold text-action transition-colors duration-[120ms] hover:text-action-hover hover:underline underline-offset-4";
+
+export const TextButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { icon?: ReactNode }>(
+  function TextButton({ icon, className = "", children, ...props }, ref) {
+    return (
+      <button ref={ref} type="button" className={`${textButtonClass} ${className}`} {...props}>
+        {icon}
+        {children}
+      </button>
+    );
+  },
+);

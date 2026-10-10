@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <rect width="96" height="96" fill="#b5f8eb"/>
+  <path d="M-4 78 C 20 62, 40 92, 64 74 S 92 56, 104 66" fill="none" stroke="#99f6e4" stroke-width="12" stroke-linecap="round"/>
+  <!-- ears -->
+  <path d="M22 18 L38 40 L18 46 Z" fill="#e67c00"/>
+  <path d="M74 18 L58 40 L78 46 Z" fill="#e67c00"/>
+  <path d="M24 25 L33 39 L22 42 Z" fill="#383838"/>
+  <path d="M72 25 L63 39 L74 42 Z" fill="#383838"/>
+  <!-- head -->
+  <path d="M16 46 C 16 34, 30 30, 48 30 C 66 30, 80 34, 80 46 C 80 62, 64 78, 48 82 C 32 78, 16 62, 16 46 Z" fill="#e67c00"/>
+  <!-- cheeks -->
+  <path d="M18 50 C 26 60, 38 64, 48 82 C 34 78, 20 66, 18 50 Z" fill="#ffffff"/>
+  <path d="M78 50 C 70 60, 58 64, 48 82 C 62 78, 76 66, 78 50 Z" fill="#ffffff"/>
+  <!-- eyes -->
+  <ellipse cx="36" cy="50" rx="3.6" ry="4.4" fill="#161616"/>
+  <ellipse cx="60" cy="50" rx="3.6" ry="4.4" fill="#161616"/>
+  <circle cx="37.2" cy="48.6" r="1.2" fill="#ffffff"/>
+  <circle cx="61.2" cy="48.6" r="1.2" fill="#ffffff"/>
+  <!-- nose -->
+  <path d="M43.5 70 Q48 67 52.5 70 Q48 76 43.5 70 Z" fill="#161616"/>
+  <!-- lime dot -->
+  <circle cx="80" cy="16" r="6" fill="#b8f117"/>
+</svg>

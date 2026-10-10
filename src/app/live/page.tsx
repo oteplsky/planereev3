@@ -1,13 +1,13 @@
 import { Suspense } from "react";
-import { HomeworkScreen } from "@/components/learner/LearnerListScreens";
+import { LiveLessonScreen } from "@/components/live/LiveLessonScreen";
 import { Hydrated } from "@/components/StoreGate";
 
 export default function Page() {
-  // The learner comes from ?learner=, read on the client.
+  // The learner and lesson come from ?learner= and ?lesson=, read on the client.
   return (
     <Suspense>
       <Hydrated>
-        <HomeworkScreen />
+        <LiveLessonScreen />
       </Hydrated>
     </Suspense>
   );

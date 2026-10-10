@@ -2,11 +2,12 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, ClipboardPlus, FileX, Info, Pencil, Play, Sparkles } from "lucide-react";
+import { ClipboardPlus, FileX, Info, Pencil, Play, Sparkles } from "lucide-react";
 import { ContextBadge } from "@/components/ContextBadge";
-import { LessonStatusBadge } from "@/components/ui/Badge";
+import { HomeworkStatusMenu } from "@/components/learner/LearnerCards";
+import { LessonStatusChip } from "@/components/ui/Badge";
 import { Breadcrumbs, type Crumb } from "@/components/ui/Breadcrumbs";
-import { Button, IconButton } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { toast } from "@/components/ui/Toast";
 import { contextHref, useActiveLearner } from "@/lib/context";
@@ -44,21 +45,13 @@ export function LessonScreen() {
   }
 
   const { lesson, content, learnerLesson } = resolved;
-  const textbook = data.textbooks.find((t) => t.id === lesson.textbookId) ?? null;
-  const parent = textbook
-    ? { label: textbook.title, href: contextHref(`/textbook/${textbook.id}`, learnerId) }
-    : { label: learner ? learner.name : "Библиотека", href: contextHref("/library", learnerId, { folder: lesson.folderId }) };
   const session = learnerLesson ? latestSession(data, learnerLesson.id) : null;
+  const homework = learnerLesson ? data.homework.filter((h) => h.learnerLessonId === learnerLesson.id) : [];
 
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-5">
-        <div className="flex items-center gap-2">
-          <IconButton label={`Назад: ${parent.label}`} onClick={() => router.push(parent.href)}>
-            <ArrowLeft size={20} strokeWidth={1.75} />
-          </IconButton>
-          <Breadcrumbs items={crumbs(data, lesson, learner)} current={lesson.title} />
-        </div>
+        <Breadcrumbs items={crumbs(data, lesson, learner)} current={lesson.title} />
 
         <div>
           <h1 className="text-h1">{lesson.title}</h1>
@@ -66,12 +59,15 @@ export function LessonScreen() {
             <ContextBadge learner={learner} />
             {session && (
               <span className="flex items-center gap-2 text-ink-secondary">
-                <LessonStatusBadge status={session.status} />
+                <LessonStatusChip status={session.status} />
                 {session.status === "in_progress"
                   ? `начат ${formatDate(session.startedAt)}`
                   : `завершён ${formatDate(session.completedAt!)}`}
               </span>
             )}
+            {homework.map((hw) => (
+              <HomeworkStatusMenu key={hw.id} homework={hw} />
+            ))}
           </div>
         </div>
 
@@ -88,11 +84,6 @@ export function LessonScreen() {
       </header>
 
       <section aria-label="Пространство урока" className="rounded-xl border border-line p-4 sm:p-6">
-        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-caption font-bold tracking-wider text-ink-secondary uppercase">Пространство урока</h2>
-          <span className="text-caption text-ink-secondary">Конструктор появится позже — сейчас здесь упрощённое содержание</span>
-        </div>
-
         {editing ? (
           <LessonEditor learner={learner} lesson={lesson} blocks={content.blocks} onDone={() => setEditing(false)} />
         ) : (
@@ -170,7 +161,7 @@ function LearnerActions({
             toast("Урок начат");
           }}
         >
-          Начать урок
+          {learner.type === "group" ? "Начать урок с группой" : "Начать индивидуальный урок"}
         </Button>
       )}
       <Button size="lg" icon={<Sparkles size={18} strokeWidth={1.75} aria-hidden />} onClick={onAdapt}>

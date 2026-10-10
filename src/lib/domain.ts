@@ -221,11 +221,24 @@ export interface HistoryEntry {
   learnerLesson: LearnerLesson;
   lesson: Lesson;
   textbook: Textbook | null;
-  status: LessonSession["status"];
+  /** Null when the lesson was only used for homework. */
+  status: LessonSession["status"] | null;
+  /** The homework status that needs attention first, or null when none was assigned. */
+  homework: HomeworkStatus | null;
   lastActivityAt: string;
 }
 
-/** One entry per lesson used with the learner, newest activity first (spec §9). */
+const homeworkPriority: HomeworkStatus[] = ["assigned", "completed", "reviewed"];
+
+/** Assigned work comes first, then work waiting for review, then reviewed. */
+export function homeworkSummary(assignments: HomeworkAssignment[]): HomeworkStatus | null {
+  return homeworkPriority.find((status) => assignments.some((h) => h.status === status)) ?? null;
+}
+
+/**
+ * One entry per lesson used with the learner — taught or set as homework —
+ * newest activity first (spec §9–10).
+ */
 export function getLessonHistory(data: AppData, learnerId: string): HistoryEntry[] {
   const latestByLearnerLesson = new Map<string, LessonSession>();
   for (const s of data.sessions) {
@@ -237,20 +250,38 @@ export function getLessonHistory(data: AppData, learnerId: string): HistoryEntry
   }
 
   const entries: HistoryEntry[] = [];
-  for (const [llId, session] of latestByLearnerLesson) {
-    const learnerLesson = data.learnerLessons.find((ll) => ll.id === llId);
-    const lesson =
-      learnerLesson && data.lessons.find((l) => l.id === learnerLesson.sourceLessonId);
-    if (!learnerLesson || !lesson) continue;
+  for (const learnerLesson of data.learnerLessons) {
+    if (learnerLesson.learnerId !== learnerId) continue;
+    const session = latestByLearnerLesson.get(learnerLesson.id);
+    const homework = data.homework.filter((h) => h.learnerLessonId === learnerLesson.id);
+    const lesson = data.lessons.find((l) => l.id === learnerLesson.sourceLessonId);
+    if (!lesson || (!session && homework.length === 0)) continue;
+    const activity = [
+      session?.lastActivityAt,
+      ...homework.flatMap((h) => [h.assignedAt, h.completedAt, h.reviewedAt]),
+    ].filter((t): t is string => !!t);
     entries.push({
       learnerLesson,
       lesson,
       textbook: data.textbooks.find((t) => t.id === lesson.textbookId) ?? null,
-      status: session.status,
-      lastActivityAt: session.lastActivityAt,
+      status: session?.status ?? null,
+      homework: homeworkSummary(homework),
+      lastActivityAt: activity.sort().at(-1)!,
     });
   }
   return entries.sort(latestFirst);
+}
+
+/** The learner's homework on this lesson, summarized (see `homeworkSummary`). */
+export function homeworkStatusForLearner(data: AppData, learnerId: string, lessonId: string): HomeworkStatus | null {
+  const ll = findLearnerLesson(data, learnerId, lessonId);
+  return ll ? homeworkSummary(data.homework.filter((h) => h.learnerLessonId === ll.id)) : null;
+}
+
+/** True when any lesson of the textbook was taught to or set as homework for the learner. */
+export function textbookUsedByLearner(data: AppData, learnerId: string, textbook: Textbook): boolean {
+  const ids = [...textbook.looseLessonIds, ...textbook.sections.flatMap((s) => s.lessonIds)];
+  return ids.some((id) => findLearnerLesson(data, learnerId, id));
 }
 
 /** Where the learner is with this lesson, if they've had it: shown on cards in a learner context. */
@@ -386,12 +417,14 @@ export function folderItemCount(data: AppData, folderId: string): number {
   );
 }
 
-/** Non-empty folders can't be deleted until their contents are moved or deleted. */
+/** Deleting a folder never deletes materials: whatever was inside moves to the library root. */
 export function deleteFolder(data: AppData, folderId: string): Result {
   if (!data.folders.some((f) => f.id === folderId)) return { ok: false, reason: "not_found" };
-  if (folderItemCount(data, folderId) > 0) return { ok: false, reason: "folder_not_empty" };
   const next = clone(data);
   next.folders = next.folders.filter((f) => f.id !== folderId);
+  for (const f of next.folders) if (f.parentFolderId === folderId) f.parentFolderId = null;
+  for (const t of next.textbooks) if (t.folderId === folderId) t.folderId = null;
+  for (const l of next.lessons) if (l.textbookId === null && l.folderId === folderId) l.folderId = null;
   return ok(next);
 }
 
@@ -799,4 +832,28 @@ export function textbookLessons(data: AppData, textbook: Textbook) {
       .map((s) => ({ section: s, lessons: s.lessonIds.map(byId).filter((l) => !!l) })),
     loose: textbook.looseLessonIds.map(byId).filter((l) => !!l),
   };
+}
+
+// ───────────────────────── Groups ─────────────────────────
+
+/** Adds students to a group; unknown ids, groups and existing members are ignored. */
+export function addGroupMembers(data: AppData, groupId: string, learnerIds: string[]): AppData {
+  const next = clone(data);
+  const group = next.learners.find((l) => l.id === groupId && l.type === "group");
+  if (!group) return data;
+  const members = new Set(group.memberIds ?? []);
+  for (const id of learnerIds) {
+    if (next.learners.some((l) => l.id === id && l.type === "individual")) members.add(id);
+  }
+  group.memberIds = [...members];
+  return next;
+}
+
+/** Takes a student out of a group. Their history and own page are untouched. */
+export function removeGroupMember(data: AppData, groupId: string, learnerId: string): AppData {
+  const next = clone(data);
+  const group = next.learners.find((l) => l.id === groupId && l.type === "group");
+  if (!group?.memberIds?.includes(learnerId)) return data;
+  group.memberIds = group.memberIds.filter((id) => id !== learnerId);
+  return next;
 }

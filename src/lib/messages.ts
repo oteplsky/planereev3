@@ -2,10 +2,6 @@ import type { BlockReason } from "./types";
 
 /** Teacher-facing explanations for refused actions. No technical copy/version terms. */
 export const blockMessages: Record<BlockReason, { title: string; description: string }> = {
-  folder_not_empty: {
-    title: "В папке есть материалы",
-    description: "Сначала перенесите или удалите всё, что в ней лежит, — потом папку можно будет удалить.",
-  },
   has_learner_activity: {
     title: "С этим материалом уже занимались",
     description:

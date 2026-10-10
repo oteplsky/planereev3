@@ -10,7 +10,7 @@ export function EmptyState({
 }: {
   icon: ReactNode;
   title: string;
-  description: string;
+  description?: string;
   action?: ReactNode;
   compact?: boolean;
 }) {
@@ -20,7 +20,7 @@ export function EmptyState({
     >
       <span className="grid size-14 place-items-center rounded-full bg-light text-action">{icon}</span>
       <p className="mt-4 text-h3">{title}</p>
-      <p className="mt-1 max-w-sm text-ink-secondary">{description}</p>
+      {description && <p className="mt-1 max-w-sm text-ink-secondary">{description}</p>}
       {action && <div className="mt-5">{action}</div>}
     </div>
   );

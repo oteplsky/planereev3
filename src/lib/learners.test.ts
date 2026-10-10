@@ -1,10 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { genitive, initials, learnerTypeLabel } from "./learners";
+import { dative, genitive, initials, learnerTypeLabel } from "./learners";
 import type { Learner } from "./types";
 
 const person = (name: string): Learner => ({ id: name, name, type: "individual", avatarColor: "blue" });
-const group = (name: string, members: string[] = []): Learner => ({
-  id: name, name, type: "group", avatarColor: "blue", members,
+const group = (name: string, memberIds: string[] = []): Learner => ({
+  id: name, name, type: "group", avatarColor: "blue", memberIds,
+});
+
+describe("dative", () => {
+  it.each([
+    ["Анна Кузнецова", "Анне"],
+    ["Максим Лебедев", "Максиму"],
+    ["София Ким", "Софии"],
+    ["Паша", "Паше"],
+    ["Дмитрий Орлов", "Дмитрию"],
+    ["Игорь Смирнов", "Игорю"],
+  ])("%s → %s", (name, expected) => {
+    expect(dative(person(name))).toBe(expected);
+  });
+
+  it("groups", () => {
+    expect(dative(group("Группа B1"))).toBe("группе B1");
+  });
 });
 
 describe("genitive", () => {

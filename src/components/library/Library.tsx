@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, FileText, Plus, SearchX } from "lucide-react";
-import { LessonStatusBadge } from "@/components/ui/Badge";
+import { BookOpen, FileText, FolderOpen, SearchX } from "lucide-react";
+import { LessonStatusChips, UsedChip } from "@/components/ui/Badge";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -13,8 +13,16 @@ import { toast } from "@/components/ui/Toast";
 import { AddTile, FolderCard, MaterialCard } from "./Cards";
 import { LibraryDialogs, requestDelete, type DialogState } from "./LibraryDialogs";
 import { contextHref } from "@/lib/context";
-import { folderItemCount, folderPath, lessonStatusForLearner, libraryLocation, textbookLessons } from "@/lib/domain";
-import { count, LESSONS, MATERIALS, TEXTBOOKS } from "@/lib/format";
+import {
+  folderItemCount,
+  folderPath,
+  homeworkStatusForLearner,
+  lessonStatusForLearner,
+  libraryLocation,
+  textbookLessons,
+  textbookUsedByLearner,
+} from "@/lib/domain";
+import { count, MATERIALS } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { Learner } from "@/lib/types";
 
@@ -61,13 +69,6 @@ export function Library({ learner, folderId }: LibraryProps) {
   const locationEmpty =
     location.folders.length + location.textbooks.length + location.lessons.length === 0;
 
-  const materialsSummary = [
-    textbooks.length ? count(textbooks.length, TEXTBOOKS) : null,
-    lessons.length ? count(lessons.length, LESSONS) : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
   const duplicate = (kind: "lesson" | "textbook", id: string) => {
     duplicateMaterial(kind, id);
     toast(kind === "lesson" ? "Копия урока создана" : "Копия учебника создана");
@@ -76,22 +77,6 @@ export function Library({ learner, folderId }: LibraryProps) {
   return (
     <section aria-labelledby="library-heading" className="flex flex-col gap-8">
       <div className="flex flex-col gap-4">
-        {learner && (
-          <div>
-            <h2 id="library-heading" className="text-h2">
-              Библиотека
-            </h2>
-            <p className="mt-1 text-body text-ink-secondary">
-              Уроки открываются в версии для ученика. Общие материалы меняются в разделе «Библиотека».
-            </p>
-          </div>
-        )}
-        {!learner && (
-          <h2 id="library-heading" className="sr-only">
-            Материалы библиотеки
-          </h2>
-        )}
-
         {path.length > 0 && (
           <Breadcrumbs
             items={[
@@ -102,6 +87,11 @@ export function Library({ learner, folderId }: LibraryProps) {
           />
         )}
 
+        {/* Inside a folder its name is the title: nothing else on screen says where you are. */}
+        <h2 id="library-heading" className={folder ? (learner ? "text-h2" : "text-h1") : learner ? "text-h2" : "sr-only"}>
+          {folder ? folder.name : "Библиотека"}
+        </h2>
+
         <div className="flex flex-wrap items-center gap-3">
           <SearchField
             value={query}
@@ -110,27 +100,6 @@ export function Library({ learner, folderId }: LibraryProps) {
             className="min-w-60 flex-1"
           />
           <SegmentedControl label="Тип материала" options={filterOptions} value={filter} onChange={setFilter} />
-          {editable && (
-            <Menu
-              items={[
-                {
-                  label: "Учебник",
-                  icon: <BookOpen size={18} strokeWidth={1.75} aria-hidden />,
-                  onSelect: () => setDialog({ type: "create", kind: "textbook" }),
-                },
-                {
-                  label: "Урок",
-                  icon: <FileText size={18} strokeWidth={1.75} aria-hidden />,
-                  onSelect: () => setDialog({ type: "create", kind: "lesson" }),
-                },
-              ]}
-              trigger={(props) => (
-                <Button {...props} variant="primary" icon={<Plus size={20} strokeWidth={1.75} aria-hidden />}>
-                  Создать
-                </Button>
-              )}
-            />
-          )}
         </div>
       </div>
 
@@ -154,8 +123,11 @@ export function Library({ learner, folderId }: LibraryProps) {
         <>
           {(folders.length > 0 || (editable && !isFiltering)) && (
             <div>
-              <SectionLabel label="Папки" count={folders.length} />
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
+              <SectionLabel label="Папки" />
+              <div className={GRID}>
+                {editable && !isFiltering && (
+                  <AddTile label="Добавить папку" onClick={() => setDialog({ type: "create", kind: "folder" })} />
+                )}
                 {folders.map((f) => (
                   <FolderCard
                     key={f.id}
@@ -172,17 +144,32 @@ export function Library({ learner, folderId }: LibraryProps) {
                     }
                   />
                 ))}
-                {editable && !isFiltering && (
-                  <AddTile label="Добавить папку" onClick={() => setDialog({ type: "create", kind: "folder" })} />
-                )}
               </div>
             </div>
           )}
 
-          {textbooks.length + lessons.length > 0 && (
+          {(textbooks.length + lessons.length > 0 || (editable && !isFiltering)) && (
             <div>
-              <SectionLabel label="Материалы" summary={materialsSummary} />
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
+              <SectionLabel label="Материалы" />
+              <div className={GRID}>
+                {editable && !isFiltering && (
+                  <Menu
+                    align="left"
+                    items={[
+                      {
+                        label: "Учебник",
+                        icon: <BookOpen size={18} strokeWidth={1.75} aria-hidden />,
+                        onSelect: () => setDialog({ type: "create", kind: "textbook" }),
+                      },
+                      {
+                        label: "Урок",
+                        icon: <FileText size={18} strokeWidth={1.75} aria-hidden />,
+                        onSelect: () => setDialog({ type: "create", kind: "lesson" }),
+                      },
+                    ]}
+                    trigger={(props) => <AddTile {...props} label="Добавить материал" className="mt-4 h-[calc(100%-1rem)] w-full" />}
+                  />
+                )}
                 {textbooks.map((t) => {
                   const { sections, loose } = textbookLessons(data, t);
                   const lessonCount = loose.length + sections.reduce((n, s) => n + s.lessons.length, 0);
@@ -193,7 +180,8 @@ export function Library({ learner, folderId }: LibraryProps) {
                       href={contextHref(`/textbook/${t.id}`, learnerId)}
                       kind="textbook"
                       title={t.title}
-                      caption={`Учебник · ${count(lessonCount, LESSONS)}`}
+                      lessonCount={lessonCount}
+                      badge={learnerId && textbookUsedByLearner(data, learnerId, t) && <UsedChip />}
                       cover={t.cover}
                       actions={
                         editable
@@ -216,9 +204,15 @@ export function Library({ learner, folderId }: LibraryProps) {
                       href={contextHref(`/lesson/${l.id}`, learnerId)}
                       kind="lesson"
                       title={l.title}
-                      caption="Урок"
                       cover={l.cover}
-                      badge={learnerId && <LessonStatusBadge status={lessonStatusForLearner(data, learnerId, l.id)} />}
+                      badge={
+                        learnerId && (
+                          <LessonStatusChips
+                            lesson={lessonStatusForLearner(data, learnerId, l.id)}
+                            homework={homeworkStatusForLearner(data, learnerId, l.id)}
+                          />
+                        )
+                      }
                       actions={
                         editable
                           ? {
@@ -236,16 +230,8 @@ export function Library({ learner, folderId }: LibraryProps) {
             </div>
           )}
 
-          {locationEmpty && (
-            <EmptyState
-              icon={<Plus size={28} strokeWidth={1.5} aria-hidden />}
-              title={folder ? "В папке пока пусто" : "Библиотека пока пустая"}
-              description={
-                editable
-                  ? "Создайте учебник или урок — или перенесите сюда готовые материалы."
-                  : "Материалы добавляются в разделе «Библиотека»."
-              }
-            />
+          {locationEmpty && !editable && (
+            <EmptyState icon={<FolderOpen size={28} strokeWidth={1.5} aria-hidden />} title={folder ? "В папке пусто" : "Библиотека пустая"} />
           )}
         </>
       )}
@@ -255,12 +241,13 @@ export function Library({ learner, folderId }: LibraryProps) {
   );
 }
 
-export function SectionLabel({ label, count, summary }: { label: string; count?: number; summary?: string }) {
+const GRID = "grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4";
+
+export function SectionLabel({ label, count }: { label: string; count?: number }) {
   return (
     <h3 className="mb-3 flex items-baseline gap-3">
       <span className="text-caption font-bold tracking-wider text-ink-secondary uppercase">{label}</span>
       {count !== undefined && <span className="text-caption text-ink-secondary">{count}</span>}
-      {summary && <span className="text-caption text-ink-secondary">{summary}</span>}
     </h3>
   );
 }

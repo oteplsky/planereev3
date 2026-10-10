@@ -3,12 +3,11 @@
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowDown, ArrowUp, BookX, Check, Ellipsis, FolderOutput, ListPlus, Pencil, Trash2 } from "lucide-react";
-import { ContextBadge } from "@/components/ContextBadge";
 import { ActionsMenu, AddTile, MaterialCard, type CardActions } from "@/components/library/Cards";
 import { Cover } from "@/components/library/Cover";
 import { LibraryDialogs, requestDelete, type DialogState } from "@/components/library/LibraryDialogs";
 import { SectionLabel } from "@/components/library/Library";
-import { LessonStatusBadge } from "@/components/ui/Badge";
+import { LessonStatusChips } from "@/components/ui/Badge";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Button, IconButton } from "@/components/ui/Button";
 import { ConfirmDialog, Dialog, PromptDialog } from "@/components/ui/Dialog";
@@ -16,9 +15,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Menu } from "@/components/ui/Menu";
 import { toast } from "@/components/ui/Toast";
 import { contextHref, useActiveLearner } from "@/lib/context";
-import { deleteSection, folderPath, lessonStatusForLearner, textbookLessons } from "@/lib/domain";
-import { count, LESSONS, plural } from "@/lib/format";
-import { forLearner } from "@/lib/learners";
+import { deleteSection, folderPath, homeworkStatusForLearner, lessonStatusForLearner, textbookLessons } from "@/lib/domain";
+import { plural } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { Lesson, Textbook, TextbookSection } from "@/lib/types";
 
@@ -117,7 +115,14 @@ export function TextbookScreen() {
               {lessonNumber(lesson.id)}
             </span>
           }
-          badge={learnerId && <LessonStatusBadge status={lessonStatusForLearner(data, learnerId, lesson.id)} />}
+          badge={
+            learnerId && (
+              <LessonStatusChips
+                lesson={lessonStatusForLearner(data, learnerId, lesson.id)}
+                homework={homeworkStatusForLearner(data, learnerId, lesson.id)}
+              />
+            )
+          }
           actions={editable ? lessonActions(lesson, sectionId) : undefined}
         />
       ))}
@@ -132,7 +137,7 @@ export function TextbookScreen() {
       <header className="flex flex-col gap-5">
         <Breadcrumbs
           items={[
-            { label: "Библиотека", href: contextHref("/library", learnerId) },
+            { label: learner ? learner.name : "Библиотека", href: contextHref("/library", learnerId) },
             ...folderPath(data, textbook.folderId).map((f) => ({
               label: f.name,
               href: contextHref("/library", learnerId, { folder: f.id }),
@@ -147,17 +152,6 @@ export function TextbookScreen() {
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="text-h1">{textbook.title}</h1>
-            <p className="mt-1 text-body-lg text-ink-secondary">
-              Учебник · {count(ordered.length, LESSONS)}
-              {sections.length > 0 && ` · ${count(sections.length, ["раздел", "раздела", "разделов"])}`}
-            </p>
-            <div className="mt-3">
-              <ContextBadge
-                learner={learner}
-                learnerLabel={learner ? `Уроки откроются в версии ${forLearner(learner)}` : undefined}
-                globalLabel="Редактирование общего материала"
-              />
-            </div>
           </div>
           {editable && (
             <ActionsMenu
@@ -180,19 +174,15 @@ export function TextbookScreen() {
         <EmptyState
           icon={<ListPlus size={28} strokeWidth={1.5} aria-hidden />}
           title="В учебнике пока нет уроков"
-          description="Уроки добавляются в разделе «Библиотека»."
         />
       )}
 
       {sections.map(({ section, lessons }, index) => (
         <section key={section.id} aria-labelledby={`sec-${section.id}`}>
           <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="flex items-baseline gap-3">
-              <h2 id={`sec-${section.id}`} className="text-caption font-bold tracking-wider text-ink-secondary uppercase">
-                {section.title}
-              </h2>
-              <span className="text-caption text-ink-secondary">{count(lessons.length, LESSONS)}</span>
-            </div>
+            <h2 id={`sec-${section.id}`} className="text-caption font-bold tracking-wider text-ink-secondary uppercase">
+              {section.title}
+            </h2>
             {editable && (
               <Menu
                 items={[
@@ -223,7 +213,7 @@ export function TextbookScreen() {
 
       {(loose.length > 0 || (editable && sections.length === 0)) && (
         <section aria-label={sections.length > 0 ? "Без раздела" : "Уроки"}>
-          {sections.length > 0 && <SectionLabel label="Без раздела" count={loose.length} />}
+          {sections.length > 0 && <SectionLabel label="Без раздела" />}
           {lessonGrid(loose, null)}
         </section>
       )}

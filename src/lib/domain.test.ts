@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as d from "./domain";
 import { createDemoData } from "./demo-data";
+import { groupsOf } from "./learners";
 import type { AppData } from "./types";
 
 const T1 = "2026-10-08T10:00:00.000Z";
@@ -185,6 +186,22 @@ describe("Scenario 7 — homework", () => {
     expect(hw.reviewedAt).toBe(T3);
   });
 
+  it("homework-only lessons show in the history with their homework status", () => {
+    let data = createDemoData();
+    data = d.assignHomework(data, "pasha", "les_daily_routines", { type: "lesson" }, "2099-01-01T00:00:00.000Z").data;
+    const [latest] = d.getLessonHistory(data, "pasha");
+    expect(latest.lesson.id).toBe("les_daily_routines");
+    expect(latest.status).toBeNull();
+    expect(latest.homework).toBe("assigned");
+  });
+
+  it("summarizes several assignments by what needs attention first", () => {
+    const hw = (status: "assigned" | "completed" | "reviewed") => ({ status }) as Parameters<typeof d.homeworkSummary>[0][number];
+    expect(d.homeworkSummary([])).toBeNull();
+    expect(d.homeworkSummary([hw("reviewed"), hw("completed")])).toBe("completed");
+    expect(d.homeworkSummary([hw("reviewed"), hw("assigned")])).toBe("assigned");
+  });
+
   it("keeps the version that existed at assignment time", () => {
     let data = createDemoData();
     const r = d.assignHomework(data, "maxim", PS, { type: "lesson" }, T1);
@@ -195,11 +212,21 @@ describe("Scenario 7 — homework", () => {
 });
 
 describe("library management", () => {
-  it("blocks deleting a non-empty folder, allows an empty one", () => {
+  it("deleting a folder moves everything inside it to the library root", () => {
+    const data = createDemoData();
+    const inside = d.libraryLocation(data, "fld_grammar");
+    const r = d.deleteFolder(data, "fld_grammar");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.data.folders.some((f) => f.id === "fld_grammar")).toBe(false);
+    const root = d.libraryLocation(r.data, null);
+    for (const t of inside.textbooks) expect(root.textbooks.map((x) => x.id)).toContain(t.id);
+    for (const l of inside.lessons) expect(root.lessons.map((x) => x.id)).toContain(l.id);
+    expect(r.data.lessons).toHaveLength(data.lessons.length);
+  });
+
+  it("deletes an empty folder", () => {
     let data = createDemoData();
-    expect(d.deleteFolder(data, "fld_publishers")).toEqual({
-      ok: false, reason: "folder_not_empty",
-    });
     const created = d.createFolder(data, "Пустая", null);
     const r = d.deleteFolder(created.data, created.folderId);
     expect(r.ok).toBe(true);
@@ -213,7 +240,8 @@ describe("library management", () => {
     expect(d.deleteTextbook(data, "tb_ef_elementary").ok).toBe(false);
     expect(d.deleteSection(data, "tb_ef_elementary", "sec_efe_1", T1).ok).toBe(false);
     expect(d.deleteLesson(data, "les_weather").ok).toBe(true);
-    expect(d.deleteTextbook(data, "tb_business").ok).toBe(true);
+    const unused = d.createTextbook(data, "Новый учебник", null, T1);
+    expect(d.deleteTextbook(unused.data, unused.textbookId).ok).toBe(true);
   });
 
   it("deleting a section removes its lessons", () => {
@@ -272,9 +300,10 @@ describe("library queries", () => {
   it("lists one location: subfolders, textbooks, standalone lessons only", () => {
     const loc = d.libraryLocation(createDemoData(), "fld_grammar");
     expect(loc.textbooks.map((t) => t.id)).toEqual(["tb_grammar_a2"]);
-    expect(loc.lessons.map((l) => l.id)).toEqual(["les_conditionals"]);
+    expect(loc.lessons.every((l) => l.folderId === "fld_grammar" && l.textbookId === null)).toBe(true);
+    expect(loc.lessons.map((l) => l.id)).toContain("les_conditionals");
     const root = d.libraryLocation(createDemoData(), null);
-    expect(root.folders).toHaveLength(3);
+    expect(root.folders).toHaveLength(5);
     expect(root.lessons.every((l) => l.textbookId === null && l.folderId === null)).toBe(true);
   });
 
@@ -288,9 +317,29 @@ describe("library queries", () => {
 
   it("explains a blocked delete without changing data", () => {
     const data = createDemoData();
-    expect(d.deleteBlockReason(data, "folder", "fld_publishers")).toBe("folder_not_empty");
+    expect(d.deleteBlockReason(data, "folder", "fld_publishers")).toBeNull();
     expect(d.deleteBlockReason(data, "lesson", PS)).toBe("has_learner_activity");
     expect(d.deleteBlockReason(data, "lesson", "les_weather")).toBeNull();
+  });
+});
+
+describe("groups", () => {
+  it("adds students to a group, skipping existing members and non-students", () => {
+    const data = d.addGroupMembers(createDemoData(), "group_a2", ["anna", "irina", "group_b1", "nobody"]);
+    const group = data.learners.find((l) => l.id === "group_a2")!;
+    expect(group.memberIds).toEqual(["irina", "timur", "vera", "artem", "anna"]);
+    expect(groupsOf(data, "anna").map((g) => g.id)).toEqual(["group_a2"]);
+  });
+});
+
+describe("removing from a group", () => {
+  it("removes only the membership", () => {
+    const before = createDemoData();
+    const data = d.removeGroupMember(before, "group_b1", "kseniya");
+    expect(data.learners.find((l) => l.id === "group_b1")!.memberIds).not.toContain("kseniya");
+    expect(groupsOf(data, "kseniya")).toEqual([]);
+    expect(data.learners).toHaveLength(before.learners.length);
+    expect(d.removeGroupMember(data, "group_b1", "kseniya")).toBe(data);
   });
 });
 
@@ -301,6 +350,34 @@ describe("demo data integrity", () => {
     expect(data.folders.length).toBeGreaterThanOrEqual(3);
     expect(data.textbooks.length).toBeGreaterThanOrEqual(5);
     expect(data.lessons.filter((l) => !l.textbookId).length).toBeGreaterThanOrEqual(8);
+  });
+
+  it("has a realistic library: 30 textbooks and standalone lessons", () => {
+    expect(data.textbooks.length + data.lessons.filter((l) => !l.textbookId).length).toBe(30);
+  });
+
+  it("long-time learners have 20+ lessons in their history", () => {
+    for (const id of ["anna", "maxim", "group_b1"]) {
+      const history = d.getLessonHistory(data, id);
+      expect(history.length).toBeGreaterThan(20);
+      expect(new Set(history.map((h) => h.homework))).toEqual(new Set([null, "assigned", "completed", "reviewed"]));
+    }
+  });
+
+  it("every group member is a student with their own profile", () => {
+    for (const g of data.learners.filter((l) => l.type === "group")) {
+      expect(g.memberIds?.length).toBeGreaterThan(0);
+      for (const id of g.memberIds!) {
+        expect(data.learners.find((l) => l.id === id)?.type).toBe("individual");
+      }
+    }
+    expect(groupsOf(data, "kseniya").map((g) => g.id)).toEqual(["group_b1"]);
+  });
+
+  it("ids are unique", () => {
+    for (const list of [data.lessons, data.learnerLessons, data.sessions, data.homework]) {
+      expect(new Set(list.map((x) => x.id)).size).toBe(list.length);
+    }
   });
 
   it("every reference resolves", () => {
