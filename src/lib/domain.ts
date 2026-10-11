@@ -17,6 +17,7 @@ import type {
   Result,
   Textbook,
 } from "./types";
+import { matchesFilters, migrateMeta, normalizeMeta, sortLevels, type Level, type MaterialMeta, type MetaFilters, noFilters } from "./meta";
 
 export function makeId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().slice(0, 8)}`;
@@ -439,18 +440,42 @@ export function folderPath(data: AppData, folderId: string | null): Folder[] {
   return path;
 }
 
+/** Metadata that applies to a material. Textbook lessons inherit their textbook's; standalone lessons have none yet. */
+export function materialMeta(data: AppData, item: Textbook | Lesson): MaterialMeta | null {
+  if ("meta" in item) return item.meta;
+  return data.textbooks.find((t) => t.id === item.textbookId)?.meta ?? null;
+}
+
 /**
- * Search across the whole library, wherever materials sit: textbooks and standalone lessons
- * as one flat list. Lessons inside textbooks are found through their textbook.
+ * Search and filter across the whole library, wherever materials sit: textbooks and standalone
+ * lessons as one flat list. Lessons inside textbooks are found through their textbook.
+ * Filters combine with each other and with the query (AND).
  */
-export function searchMaterials(data: AppData, query: string) {
+export function searchMaterials(data: AppData, query: string, filters: MetaFilters = noFilters) {
   const q = query.trim().toLocaleLowerCase("ru");
   const byTitle = (a: { title: string }, b: { title: string }) => a.title.localeCompare(b.title, "ru");
-  const hit = (title: string) => title.toLocaleLowerCase("ru").includes(q);
+  const hit = (item: Textbook | Lesson) =>
+    item.title.toLocaleLowerCase("ru").includes(q) && matchesFilters(materialMeta(data, item), filters);
   return {
-    textbooks: data.textbooks.filter((t) => hit(t.title)).sort(byTitle),
-    lessons: data.lessons.filter((l) => l.textbookId === null && hit(l.title)).sort(byTitle),
+    textbooks: data.textbooks.filter(hit).sort(byTitle),
+    lessons: data.lessons.filter((l) => l.textbookId === null && hit(l)).sort(byTitle),
   };
+}
+
+/**
+ * «Уровень» filter options: levels that materials actually have, among materials matching the
+ * selected subject and age group (the level filter itself is ignored, so its own choice stays listed).
+ */
+export function filterLevelOptions(data: AppData, filters: MetaFilters): Level[] {
+  const scope = { ...filters, level: null };
+  return sortLevels(
+    data.textbooks.filter((t) => matchesFilters(t.meta, scope)).flatMap((t) => (t.meta.level ? [t.meta.level] : [])),
+  );
+}
+
+/** Saved data from earlier prototype versions, brought up to the current metadata options. */
+export function migrateData(data: AppData): AppData {
+  return { ...data, textbooks: data.textbooks.map((t) => ({ ...t, meta: migrateMeta(t.meta) })) };
 }
 
 /** What one library location contains. Textbook lessons are not listed here. */
@@ -469,9 +494,16 @@ export function libraryLocation(data: AppData, folderId: string | null) {
 
 // ───────────────────────── Materials (spec §5.4–5.5) ─────────────────────────
 
+export interface NewTextbook {
+  title: string;
+  description: string;
+  meta: MaterialMeta;
+}
+
+/** New textbooks start without sections (Учебник → Уроки). */
 export function createTextbook(
   data: AppData,
-  title: string,
+  input: NewTextbook,
   folderId: string | null,
   now: string,
 ): { data: AppData; textbookId: string } {
@@ -479,14 +511,76 @@ export function createTextbook(
   const textbookId = makeId("tb");
   next.textbooks.push({
     id: textbookId,
-    title,
+    title: input.title.trim(),
+    description: input.description.trim(),
+    meta: normalizeMeta(input.meta),
     folderId,
+    useSections: false,
     sections: [],
     looseLessonIds: [],
     cover: null,
+    coverImage: null,
     updatedAt: now,
   });
   return { data: next, textbookId };
+}
+
+export type TextbookDetails = Partial<Pick<Textbook, "title" | "description" | "meta">>;
+
+/** Header edits. A subject or age-group change that invalidates the level clears it. */
+export function updateTextbookDetails(
+  data: AppData,
+  textbookId: string,
+  details: TextbookDetails,
+  now: string,
+): AppData {
+  return editTextbook(
+    data,
+    textbookId,
+    (tb) => {
+      if (details.title !== undefined && details.title.trim()) tb.title = details.title.trim();
+      if (details.description !== undefined) tb.description = details.description.trim();
+      if (details.meta) tb.meta = normalizeMeta(details.meta);
+    },
+    now,
+  );
+}
+
+/** Upload, replace (an image) or remove (null) the cover. Removing also drops a generated colour cover. */
+export function setTextbookCoverImage(
+  data: AppData,
+  textbookId: string,
+  image: string | null,
+  now: string,
+): AppData {
+  return editTextbook(
+    data,
+    textbookId,
+    (tb) => {
+      tb.coverImage = image;
+      tb.cover = null;
+    },
+    now,
+  );
+}
+
+export function textbookLessonCount(textbook: Textbook): number {
+  return textbook.looseLessonIds.length + textbook.sections.reduce((n, s) => n + s.lessonIds.length, 0);
+}
+
+/**
+ * «Использовать разделы». Refused once the textbook has lessons: the MVP never converts
+ * one structure into the other, so nothing is moved or deleted.
+ */
+export function setUseSections(
+  data: AppData,
+  textbookId: string,
+  useSections: boolean,
+  now: string,
+): AppData {
+  const tb = data.textbooks.find((t) => t.id === textbookId);
+  if (!tb || tb.useSections === useSections || textbookLessonCount(tb) > 0) return data;
+  return editTextbook(data, textbookId, (t) => (t.useSections = useSections), now);
 }
 
 export interface LessonPlacement {
@@ -763,6 +857,29 @@ export function moveSection(
       const j = i + direction;
       if (i < 0 || j < 0 || j >= tb.sections.length) return;
       [tb.sections[i], tb.sections[j]] = [tb.sections[j], tb.sections[i]];
+    },
+    now,
+  );
+}
+
+/** Drag and drop: puts the section at `index` (counted after removing it). Its lessons travel with it. */
+export function moveSectionTo(
+  data: AppData,
+  textbookId: string,
+  sectionId: string,
+  index: number,
+  now: string,
+): AppData {
+  return editTextbook(
+    data,
+    textbookId,
+    (tb) => {
+      const sorted = [...tb.sections].sort((a, b) => a.order - b.order);
+      const from = sorted.findIndex((s) => s.id === sectionId);
+      if (from < 0) return;
+      const [section] = sorted.splice(from, 1);
+      sorted.splice(Math.max(0, Math.min(index, sorted.length)), 0, section);
+      tb.sections = sorted;
     },
     now,
   );

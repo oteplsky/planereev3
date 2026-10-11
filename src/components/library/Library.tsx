@@ -1,11 +1,13 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BookOpen, FileText, FolderOpen, FolderOutput, SearchX } from "lucide-react";
 import { LessonStatusChips, UsedChip } from "@/components/ui/Badge";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
-import { Button } from "@/components/ui/Button";
+import { Button, TextButton } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Select } from "@/components/ui/Field";
 import { Menu, type MenuItem } from "@/components/ui/Menu";
 import { SearchField } from "@/components/ui/SearchField";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -14,20 +16,41 @@ import { AddTile, FolderCard, MaterialCard } from "./Cards";
 import { LibraryDialogs, requestDelete, type DialogState } from "./LibraryDialogs";
 import { contextHref } from "@/lib/context";
 import {
+  filterLevelOptions,
   folderItemCount,
   folderPath,
   homeworkStatusForLearner,
   lessonStatusForLearner,
   libraryLocation,
   searchMaterials,
-  textbookLessons,
+  textbookLessonCount,
   textbookUsedByLearner,
 } from "@/lib/domain";
+import {
+  AGE_GROUPS,
+  ageGroupLabels,
+  hasActiveFilters,
+  levelLabels,
+  noFilters,
+  SUBJECTS,
+  subjectLabels,
+  type MetaFilters,
+} from "@/lib/meta";
 import { count, MATERIALS } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { Learner } from "@/lib/types";
 
 type Filter = "all" | "textbooks" | "lessons";
+
+/**
+ * What «Добавить материал» can create. With one kind the tile opens its form directly;
+ * with more it becomes a menu («Урок», «Учебник»).
+ */
+const addableKinds: ("textbook" | "lesson")[] = ["lesson", "textbook"];
+const kindOption = {
+  textbook: { label: "Учебник", icon: BookOpen },
+  lesson: { label: "Урок", icon: FileText },
+};
 
 const filterOptions: { value: Filter; label: string }[] = [
   { value: "all", label: "Все" },
@@ -43,15 +66,17 @@ interface LibraryProps {
 
 /**
  * The one library implementation, shared by the global and learner contexts (spec §7.1).
- * Two levels only: the root and one open folder. Search covers the whole library and shows
- * a flat list without folders; the type filter alone applies to the current location.
+ * Two levels only: the root and one open folder. Search and the metadata filters cover the whole
+ * library and show a flat list without folders; the type filter alone applies to the current location.
  */
 export function Library({ learner, folderId }: LibraryProps) {
   const data = useStore((s) => s.data);
   const duplicateMaterial = useStore((s) => s.duplicateMaterial);
   const moveMaterial = useStore((s) => s.moveMaterial);
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [meta, setMeta] = useState<MetaFilters>(noFilters);
   const [dialog, setDialog] = useState<DialogState>(null);
 
   const editable = learner === null;
@@ -61,8 +86,17 @@ export function Library({ learner, folderId }: LibraryProps) {
   const path = folderPath(data, folder?.id ?? null);
 
   const location = libraryLocation(data, folder?.id ?? null);
-  const searching = query.trim() !== "";
-  const source = searching ? searchMaterials(data, query) : location;
+  const metaFiltering = hasActiveFilters(meta);
+  const searching = query.trim() !== "" || metaFiltering;
+  const source = searching ? searchMaterials(data, query, meta) : location;
+  const levelOptions = filterLevelOptions(data, meta);
+  const setMetaFilter = (patch: Partial<MetaFilters>) =>
+    setMeta((prev) => {
+      const next = { ...prev, ...patch };
+      // A level the new subject / age group can't have would silently hide everything.
+      if (next.level && !filterLevelOptions(data, next).includes(next.level)) next.level = null;
+      return next;
+    });
 
   // Folders live only at the root and never appear in search results.
   const folders = !searching && !folder && filter === "all" ? location.folders : [];
@@ -120,6 +154,37 @@ export function Library({ learner, folderId }: LibraryProps) {
           />
           <SegmentedControl label="Тип материала" options={filterOptions} value={filter} onChange={setFilter} />
         </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Select
+            aria-label="Предмет"
+            placeholder="Предмет"
+            value={meta.subject}
+            options={SUBJECTS.map((v) => ({ value: v, label: subjectLabels[v] }))}
+            onChange={(subject) => setMetaFilter({ subject })}
+            highlighted={meta.subject !== null}
+            className="w-full sm:w-56"
+          />
+          <Select
+            aria-label="Возрастная группа"
+            placeholder="Возрастная группа"
+            value={meta.ageGroup}
+            options={AGE_GROUPS.map((v) => ({ value: v, label: ageGroupLabels[v] }))}
+            onChange={(ageGroup) => setMetaFilter({ ageGroup })}
+            highlighted={meta.ageGroup !== null}
+            className="w-full sm:w-52"
+          />
+          <Select
+            aria-label="Уровень"
+            placeholder="Уровень"
+            value={meta.level}
+            options={levelOptions.map((v) => ({ value: v, label: levelLabels[v] }))}
+            onChange={(level) => setMetaFilter({ level })}
+            highlighted={meta.level !== null}
+            className="w-full sm:w-48"
+          />
+          {metaFiltering && <TextButton onClick={() => setMeta(noFilters)}>Сбросить фильтры</TextButton>}
+        </div>
       </div>
 
       {nothingFound ? (
@@ -132,6 +197,7 @@ export function Library({ learner, folderId }: LibraryProps) {
               onClick={() => {
                 setQuery("");
                 setFilter("all");
+                setMeta(noFilters);
               }}
             >
               Сбросить
@@ -171,27 +237,8 @@ export function Library({ learner, folderId }: LibraryProps) {
             <div>
               <SectionLabel label={searching ? "Результаты поиска" : "Материалы"} />
               <div className={GRID}>
-                {editable && !isFiltering && (
-                  <Menu
-                    align="left"
-                    items={[
-                      {
-                        label: "Учебник",
-                        icon: <BookOpen size={18} strokeWidth={1.75} aria-hidden />,
-                        onSelect: () => setDialog({ type: "create", kind: "textbook" }),
-                      },
-                      {
-                        label: "Урок",
-                        icon: <FileText size={18} strokeWidth={1.75} aria-hidden />,
-                        onSelect: () => setDialog({ type: "create", kind: "lesson" }),
-                      },
-                    ]}
-                    trigger={(props) => <AddTile {...props} label="Добавить материал" className="mt-4 h-[calc(100%-1rem)] w-full" />}
-                  />
-                )}
+                {editable && !isFiltering && <AddMaterial onSelect={(kind) => setDialog({ type: "create", kind })} />}
                 {textbooks.map((t) => {
-                  const { sections, loose } = textbookLessons(data, t);
-                  const lessonCount = loose.length + sections.reduce((n, s) => n + s.lessons.length, 0);
                   const target = { kind: "textbook" as const, id: t.id, title: t.title };
                   return (
                     <MaterialCard
@@ -199,9 +246,10 @@ export function Library({ learner, folderId }: LibraryProps) {
                       href={contextHref(`/textbook/${t.id}`, learnerId)}
                       kind="textbook"
                       title={t.title}
-                      lessonCount={lessonCount}
+                      lessonCount={textbookLessonCount(t)}
                       badge={learnerId && textbookUsedByLearner(data, learnerId, t) && <UsedChip />}
                       cover={t.cover}
+                      coverImage={t.coverImage}
                       actions={
                         editable
                           ? {
@@ -257,8 +305,33 @@ export function Library({ learner, folderId }: LibraryProps) {
         </>
       )}
 
-      {editable && <LibraryDialogs state={dialog} onClose={() => setDialog(null)} folderId={folder?.id ?? null} />}
+      {editable && (
+        <LibraryDialogs
+          state={dialog}
+          onClose={() => setDialog(null)}
+          folderId={folder?.id ?? null}
+          // A new textbook opens straight away, ready to edit.
+          onTextbookCreated={(id) => router.push(`/textbook/${id}`)}
+        />
+      )}
     </section>
+  );
+}
+
+function AddMaterial({ onSelect }: { onSelect: (kind: "textbook" | "lesson") => void }) {
+  const tileClass = "mt-4 h-[calc(100%-1rem)] w-full";
+  if (addableKinds.length === 1) {
+    return <AddTile label="Добавить материал" className={`${tileClass} min-h-28`} onClick={() => onSelect(addableKinds[0])} />;
+  }
+  return (
+    <Menu
+      align="left"
+      items={addableKinds.map((kind) => {
+        const { label, icon: Icon } = kindOption[kind];
+        return { label, icon: <Icon size={18} strokeWidth={1.75} aria-hidden />, onSelect: () => onSelect(kind) };
+      })}
+      trigger={(props) => <AddTile {...props} label="Добавить материал" className={tileClass} />}
+    />
   );
 }
 

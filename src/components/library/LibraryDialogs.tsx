@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Folder as FolderIcon, LibraryBig } from "lucide-react";
+import { CreateTextbookDialog } from "@/components/textbook/CreateTextbookDialog";
 import { ConfirmDialog, Dialog, NoticeDialog, PromptDialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui/Toast";
@@ -28,9 +29,9 @@ export function requestDelete(data: AppData, target: Target): DialogState {
   return reason ? { type: "blocked", reason } : { type: "delete", target };
 }
 
+/** Single-field creation. Textbooks have their own form (CreateTextbookDialog). */
 const createCopy = {
   lesson: { title: "Новый урок", label: "Название урока", placeholder: "Например, Present Perfect", done: "Урок создан" },
-  textbook: { title: "Новый учебник", label: "Название учебника", placeholder: "Например, English File A2", done: "Учебник создан" },
   folder: { title: "Новая папка", label: "Название папки", placeholder: "Например, Грамматика", done: "Папка создана" },
 };
 
@@ -43,28 +44,36 @@ interface LibraryDialogsProps {
   folderId: string | null;
   /** Called after a successful delete, e.g. to leave a screen whose subject is gone. */
   onDeleted?: (target: Target) => void;
+  /** Called after a textbook is created, e.g. to open it. */
+  onTextbookCreated?: (textbookId: string) => void;
 }
 
-export function LibraryDialogs({ state, onClose, folderId, onDeleted }: LibraryDialogsProps) {
+export function LibraryDialogs({ state, onClose, folderId, onDeleted, onTextbookCreated }: LibraryDialogsProps) {
   const store = useStore();
+  const simpleCreate = state?.type === "create" && state.kind !== "textbook" ? createCopy[state.kind] : null;
 
   return (
     <>
       <PromptDialog
-        open={state?.type === "create"}
-        title={state?.type === "create" ? createCopy[state.kind].title : ""}
-        label={state?.type === "create" ? createCopy[state.kind].label : ""}
-        placeholder={state?.type === "create" ? createCopy[state.kind].placeholder : ""}
+        open={!!simpleCreate}
+        title={simpleCreate?.title ?? ""}
+        label={simpleCreate?.label ?? ""}
+        placeholder={simpleCreate?.placeholder ?? ""}
         submitLabel="Создать"
         onClose={onClose}
         onSubmit={(title) => {
-          if (state?.type !== "create") return;
+          if (state?.type !== "create" || !simpleCreate) return;
           // Folders exist only at the root: no nesting in the MVP.
           if (state.kind === "folder") store.createFolder(title, null);
-          else if (state.kind === "textbook") store.createTextbook(title, folderId);
           else store.createLesson(title, { folderId });
-          toast(createCopy[state.kind].done);
+          toast(simpleCreate.done);
         }}
+      />
+
+      <CreateTextbookDialog
+        open={state?.type === "create" && state.kind === "textbook"}
+        onClose={onClose}
+        onCreate={(input) => onTextbookCreated?.(store.createTextbook(input, folderId))}
       />
 
       <PromptDialog

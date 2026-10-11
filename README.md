@@ -48,6 +48,7 @@ learner history. Deleting a folder never deletes materials: its contents move to
 src/lib/
   types.ts        Data model (spec §13) + `adapted` flag on blocks
   domain.ts       All product rules as pure functions (AppData in → AppData out)
+  meta.ts         Textbook metadata: subject, age group, level options and library filters
   domain.test.ts  Acceptance scenarios 3–7, deletion rules, demo data integrity
   store.ts        Zustand store persisted to localStorage; thin wrapper over domain.ts
   demo-data.ts    Learners, folders, textbooks, lessons and histories (spec §14)
@@ -57,7 +58,7 @@ src/lib/
 src/components/
   ui/             UI kit primitives: Button, Menu, Dialog, Badge, SegmentedControl, …
   library/        The one Library component, shared by global and learner contexts
-  textbook/       Textbook view with sections
+  textbook/       Textbook: creation form, editable header (cover, metadata), flat or sectioned structure
   learner/        Learner workspace: current lesson, lesson history chips with homework marks
   lesson/         Lesson placeholder: blocks, editor, homework dialog
   live/           Placeholder for the live lesson (another product area)
@@ -72,6 +73,8 @@ so refresh and links keep it. No `learner` means the global library.
 | Scenario | Try this |
 |---|---|
 | Global content | «Библиотека» → the «+» tiles at the start of Папки and Материалы, ⋯ menus; open a textbook to manage sections |
+| Textbooks | «Добавить материал» → fill the form → the new textbook opens ready to edit. Switch «Использовать разделы» before adding lessons; drag sections and lessons by their handles (or focus a handle and press ↑ ↓) |
+| Filters | Предмет · Возрастная группа · Уровень under the search, in the library and in student and group pages. They search every folder; lessons inside textbooks use the textbook's metadata |
 | Learner navigation | Switch Библиотека → Анна → Максим in the top strip |
 | Personalized lesson | Анна → English File Elementary → Present Simple → «Адаптировать урок» → add an exercise → save. Open the same lesson for Максим: it isn't there |
 | Global edits don't propagate | Библиотека → Present Simple → «Редактировать» → change a block. Анна keeps hers; Максим sees the change |

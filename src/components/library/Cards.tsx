@@ -12,7 +12,8 @@ import type { AccentColor } from "@/lib/types";
 const iconProps = { size: 18, strokeWidth: 1.75, "aria-hidden": true } as const;
 
 export interface CardActions {
-  onRename(): void;
+  /** Omitted where the title is edited in place (the textbook header). */
+  onRename?(): void;
   onDelete(): void;
   onDuplicate?(): void;
   onMove?(): void;
@@ -23,7 +24,8 @@ export interface CardActions {
 }
 
 function actionItems(actions: CardActions): MenuItem[] {
-  const items: MenuItem[] = [{ label: "Переименовать", icon: <Pencil {...iconProps} />, onSelect: actions.onRename }];
+  const items: MenuItem[] = [];
+  if (actions.onRename) items.push({ label: "Переименовать", icon: <Pencil {...iconProps} />, onSelect: actions.onRename });
   if (actions.onDuplicate) items.push({ label: "Создать копию", icon: <Copy {...iconProps} />, onSelect: actions.onDuplicate });
   if (actions.onMove) {
     items.push({ label: actions.moveLabel ?? "Переместить в папку", icon: <FolderInput {...iconProps} />, onSelect: actions.onMove });
@@ -102,6 +104,7 @@ interface MaterialCardProps {
   caption?: string;
   /** Omit for a compact card without a cover (lessons inside a textbook). */
   cover?: AccentColor | null;
+  coverImage?: string | null;
   /** Shown before the title in compact cards, e.g. the lesson number. */
   leading?: React.ReactNode;
   badge?: React.ReactNode;
@@ -114,15 +117,15 @@ interface MaterialCardProps {
  * UI kit · Карточки: white, 1px #EFEFEF outline, no shadow; outline darkens on hover.
  * Library cards (with a cover) reserve room on top so a textbook can show as a stack of pages.
  */
-export function MaterialCard({ href, kind, title, caption, cover, leading, badge, lessonCount, actions }: MaterialCardProps) {
+export function MaterialCard({ href, kind, title, caption, cover, coverImage, leading, badge, lessonCount, actions }: MaterialCardProps) {
   const hasCover = cover !== undefined;
   const stacked = hasCover && kind === "textbook";
 
   return (
     <div className={`group relative flex flex-col ${hasCover ? "pt-4" : ""}`}>
-      {stacked && <StackPages cover={cover} />}
+      {stacked && <StackPages cover={coverImage ? null : cover} />}
       <div className="relative flex flex-1 flex-col rounded-lg border border-line bg-surface transition-colors duration-[120ms] group-hover:border-line-strong">
-        {hasCover && <Cover cover={cover} kind={kind} />}
+        {hasCover && <Cover cover={cover} kind={kind} image={coverImage} />}
         {lessonCount !== undefined && (
           <span className="absolute top-2.5 right-2.5 inline-flex items-center gap-1 rounded-full bg-surface/90 px-2 py-0.5 text-caption font-semibold">
             <FileText size={14} strokeWidth={2} aria-hidden />

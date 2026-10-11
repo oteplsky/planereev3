@@ -1,5 +1,7 @@
 // Prototype data model (spec §13). Not a final production schema.
 
+import type { MaterialMeta } from "./meta";
+
 export type AccentColor =
   | "pink"
   | "coral"
@@ -49,11 +51,22 @@ export interface TextbookSection {
 export interface Textbook {
   id: string;
   title: string;
+  description: string;
+  /** Also applies to every lesson inside the textbook. */
+  meta: MaterialMeta;
   folderId: string | null;
+  /**
+   * Off: Учебник → Уроки (lessons in looseLessonIds). On: Учебник → Разделы → Уроки.
+   * Can change only while the textbook has no lessons.
+   */
+  useSections: boolean;
   sections: TextbookSection[];
-  /** Lessons that belong to the textbook but to no section (sections are optional). */
+  /** Lessons of a textbook without sections. */
   looseLessonIds: string[];
+  /** Generated colour cover (demo materials). */
   cover: AccentColor | null;
+  /** Uploaded cover as a data URL; takes precedence over `cover`. */
+  coverImage: string | null;
   updatedAt: string;
 }
 

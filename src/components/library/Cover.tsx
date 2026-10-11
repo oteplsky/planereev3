@@ -38,13 +38,21 @@ export function StackPages({ cover }: { cover: AccentColor | null }) {
 interface CoverProps {
   cover: AccentColor | null;
   kind: "lesson" | "textbook";
+  /** Uploaded picture; replaces the generated cover. */
+  image?: string | null;
 }
 
 /**
  * Card cover. With a colour: the brand ribbon with the lime dot (brand · Изображения).
  * Without: a quiet placeholder with the material's icon.
  */
-export function Cover({ cover, kind }: CoverProps) {
+export function Cover({ cover, kind, image }: CoverProps) {
+  if (image) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- a local data URL, nothing to optimise
+      <img src={image} alt="" className="block aspect-[16/10] w-full rounded-t-lg object-cover" />
+    );
+  }
   if (!cover) {
     const Icon = kind === "textbook" ? BookOpen : FileText;
     return (

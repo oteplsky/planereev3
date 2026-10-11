@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as d from "./domain";
 import { createDemoData } from "./demo-data";
 import { groupsOf } from "./learners";
+import * as m from "./meta";
 import type { AppData } from "./types";
 
 const T1 = "2026-10-08T10:00:00.000Z";
@@ -9,6 +10,11 @@ const T2 = "2026-10-08T11:00:00.000Z";
 const T3 = "2026-10-08T12:00:00.000Z";
 
 const PS = "les_present_simple";
+const NEW_TEXTBOOK: d.NewTextbook = {
+  title: "Новый учебник",
+  description: "",
+  meta: { subject: "english", customSubject: "", ageGroup: "teens", level: "b1" },
+};
 const blockTitles = (data: AppData, lessonId: string, learnerId: string | null) =>
   d.resolveLesson(data, lessonId, learnerId)!.content.blocks.map((b) => b.title);
 
@@ -240,7 +246,7 @@ describe("library management", () => {
     expect(d.deleteTextbook(data, "tb_ef_elementary").ok).toBe(false);
     expect(d.deleteSection(data, "tb_ef_elementary", "sec_efe_1", T1).ok).toBe(false);
     expect(d.deleteLesson(data, "les_weather").ok).toBe(true);
-    const unused = d.createTextbook(data, "Новый учебник", null, T1);
+    const unused = d.createTextbook(data, NEW_TEXTBOOK, null, T1);
     expect(d.deleteTextbook(unused.data, unused.textbookId).ok).toBe(true);
   });
 
@@ -333,6 +339,165 @@ describe("search", () => {
 
   it("skips lessons inside textbooks", () => {
     expect(d.searchMaterials(createDemoData(), "Present Simple").lessons).toEqual([]);
+  });
+});
+
+describe("textbook metadata", () => {
+  it("offers only Дети, Подростки, Взрослые", () => {
+    expect(m.AGE_GROUPS.map((a) => m.ageGroupLabels[a])).toEqual(["Дети", "Подростки", "Взрослые"]);
+  });
+
+  it("offers the same CEFR list at every age for English and other foreign languages", () => {
+    for (const subject of ["english", "other_language"] as const) {
+      for (const age of m.AGE_GROUPS) {
+        expect(m.levelsFor(subject, age).map((l) => m.levelLabels[l])).toEqual(["Pre-A1", "A1", "A2", "B1", "B2", "C1", "C2", "Другое"]);
+      }
+    }
+    expect(m.levelsFor("english", null)).toEqual([]);
+  });
+
+  it("offers school stages by age for school and other subjects", () => {
+    for (const subject of ["english_school", "math", "russian_school", "other"] as const) {
+      expect(m.levelsFor(subject, "kids").map((l) => m.levelLabels[l])).toEqual([
+        "Дошкольное образование", "1 класс", "2 класс", "3 класс", "4 класс", "5 класс", "6 класс", "Другое",
+      ]);
+      expect(m.levelsFor(subject, "teens").map((l) => m.levelLabels[l])).toEqual([
+        "5 класс", "6 класс", "7 класс", "8 класс", "9 класс", "10 класс", "11 класс", "Другое",
+      ]);
+      expect(m.levelsFor(subject, "adults")).toEqual(["other"]);
+    }
+  });
+
+  it("maps saved «Дошкольники» to «Дети» and clears levels that no longer exist", () => {
+    const legacy = (meta: object) => m.migrateMeta(meta as m.MaterialMeta);
+    expect(legacy({ subject: "other", customSubject: "Рисование", ageGroup: "preschool", level: "preschool_ed" }))
+      .toMatchObject({ ageGroup: "kids", level: "preschool_ed" });
+    expect(legacy({ subject: "other", customSubject: "Охрана труда", ageGroup: "adults", level: "dpo" }))
+      .toMatchObject({ ageGroup: "adults", level: null });
+    expect(legacy({ subject: "english", customSubject: "", ageGroup: "preschool", level: "pre_a1" }))
+      .toMatchObject({ ageGroup: "kids", level: "pre_a1" });
+
+    const data = createDemoData();
+    const tb = data.textbooks[0];
+    tb.meta = { ...tb.meta, ageGroup: "preschool" as m.AgeGroup };
+    expect(d.migrateData(data).textbooks[0].meta.ageGroup).toBe("kids");
+  });
+
+  it("clears a level only when it stops being valid", () => {
+    const b1: m.MaterialMeta = { subject: "english", customSubject: "", ageGroup: "teens", level: "b1" };
+    expect(m.normalizeMeta({ ...b1, ageGroup: "adults" }).level).toBe("b1");
+    expect(m.normalizeMeta({ ...b1, subject: "other" }).level).toBeNull();
+    const grade: m.MaterialMeta = { subject: "other", customSubject: "История", ageGroup: "kids", level: "grade_5" };
+    expect(m.normalizeMeta({ ...grade, ageGroup: "teens" }).level).toBe("grade_5");
+    expect(m.normalizeMeta({ ...grade, level: "grade_2", ageGroup: "teens" }).level).toBeNull();
+    expect(m.normalizeMeta({ ...grade, ageGroup: "adults" }).level).toBeNull();
+    expect(m.normalizeMeta({ ...grade, level: "other", ageGroup: "adults" }).level).toBe("other");
+    expect(m.normalizeMeta({ ...grade, level: "other", subject: "english" })).toMatchObject({ level: "other", customSubject: "" });
+  });
+
+  it("uses CEFR for English and other foreign languages, and grades for school subjects", () => {
+    const cefr = m.levelsFor("english", "kids");
+    expect(m.levelsFor("other_language", "teens")).toEqual(cefr);
+    for (const subject of ["english_school", "math", "russian_school", "other"] as const) {
+      expect(m.levelsFor(subject, "kids")).toContain("grade_5");
+      expect(m.levelsFor(subject, "kids")).not.toContain("b1");
+    }
+  });
+
+  it("asks for the name only for «Другой иностранный язык» and «Другой предмет»", () => {
+    const base: m.MaterialMeta = { subject: "math", customSubject: "", ageGroup: "teens", level: "grade_9" };
+    expect(m.isMetaComplete(base)).toBe(true);
+    expect(m.isMetaComplete({ ...base, subject: "other_language", level: "a2" })).toBe(false);
+    const german = { ...base, subject: "other_language" as const, customSubject: "Немецкий", level: "a2" as const };
+    expect(m.isMetaComplete(german)).toBe(true);
+    expect(m.metaSummary(german)).toBe("Немецкий · Подростки · A2");
+    expect(m.normalizeMeta({ ...german, subject: "english_school" })).toMatchObject({ customSubject: "", level: null });
+  });
+
+  it("requires a custom subject for «Другой предмет»", () => {
+    const meta: m.MaterialMeta = { subject: "other", customSubject: " ", ageGroup: "adults", level: "other" };
+    expect(m.isMetaComplete(meta)).toBe(false);
+    expect(m.isMetaComplete({ ...meta, customSubject: "Пожарная безопасность" })).toBe(true);
+    expect(m.isMetaComplete({ ...meta, customSubject: "Охрана труда", level: null })).toBe(false);
+  });
+
+  it("creates a textbook without sections and edits its details", () => {
+    const r = d.createTextbook(createDemoData(), { ...NEW_TEXTBOOK, title: "  Физика 7  ", description: " " }, null, T1);
+    let tb = r.data.textbooks.find((t) => t.id === r.textbookId)!;
+    expect(tb).toMatchObject({ title: "Физика 7", description: "", useSections: false, coverImage: null });
+
+    let data = d.updateTextbookDetails(r.data, tb.id, { title: "  " }, T2);
+    expect(data.textbooks.find((t) => t.id === tb.id)!.title).toBe("Физика 7");
+    data = d.updateTextbookDetails(data, tb.id, { meta: { ...tb.meta, subject: "other" } }, T2);
+    tb = data.textbooks.find((t) => t.id === tb.id)!;
+    expect(tb.meta.level).toBeNull();
+
+    data = d.setTextbookCoverImage(data, tb.id, "data:image/jpeg;base64,AAA", T2);
+    expect(data.textbooks.find((t) => t.id === tb.id)!.coverImage).toBe("data:image/jpeg;base64,AAA");
+    data = d.setTextbookCoverImage(data, "tb_business", null, T2);
+    expect(data.textbooks.find((t) => t.id === "tb_business")).toMatchObject({ cover: null, coverImage: null });
+  });
+
+  it("locks the structure once the textbook has a lesson", () => {
+    const r = d.createTextbook(createDemoData(), NEW_TEXTBOOK, null, T1);
+    let data = d.setUseSections(r.data, r.textbookId, true, T1);
+    data = d.addSection(data, r.textbookId, "Unit 1", T1);
+    data = d.setUseSections(data, r.textbookId, false, T1);
+    expect(data.textbooks.find((t) => t.id === r.textbookId)!.useSections).toBe(false);
+
+    data = d.setUseSections(data, r.textbookId, true, T1);
+    const sectionId = data.textbooks.find((t) => t.id === r.textbookId)!.sections[0].id;
+    data = d.createLesson(data, "Урок 1", { textbookId: r.textbookId, sectionId }, T1).data;
+    expect(d.setUseSections(data, r.textbookId, false, T1)).toBe(data);
+  });
+
+  it("moves a section with its lessons to any position", () => {
+    const data = d.moveSectionTo(createDemoData(), "tb_ef_intermediate", "sec_efi_3", 0, T1);
+    const { sections } = d.textbookLessons(data, data.textbooks.find((t) => t.id === "tb_ef_intermediate")!);
+    expect(sections.map((s) => s.section.id)).toEqual(["sec_efi_3", "sec_efi_1", "sec_efi_2"]);
+    expect(sections[0].lessons.map((l) => l.id)).toEqual(["les_transport", "les_used_to"]);
+  });
+
+  it("moving a lesson between sections never copies it", () => {
+    const before = createDemoData();
+    const data = d.moveLessonInTextbook(before, "tb_ef_intermediate", "les_used_to", "sec_efi_1", T1, 1);
+    expect(data.lessons).toHaveLength(before.lessons.length);
+    const tb = data.textbooks.find((t) => t.id === "tb_ef_intermediate")!;
+    expect(tb.sections.flatMap((s) => s.lessonIds).filter((id) => id === "les_used_to")).toHaveLength(1);
+    expect(tb.sections[0].lessonIds).toEqual(["les_present_tenses_review", "les_used_to", "les_future_forms"]);
+  });
+});
+
+describe("library filters", () => {
+  const data = createDemoData();
+  const ids = (r: ReturnType<typeof d.searchMaterials>) => [...r.textbooks, ...r.lessons].map((x) => x.id);
+
+  it("combines filters with each other and with the query (AND), across folders", () => {
+    const teensB1 = { subject: "english", ageGroup: "teens", level: "b1" } as const;
+    expect(ids(d.searchMaterials(data, "", teensB1))).toEqual(["tb_vocab_b1"]);
+    expect(data.textbooks.find((t) => t.id === "tb_vocab_b1")!.folderId).toBe("fld_vocabulary");
+    expect(ids(d.searchMaterials(data, "vocabulary", teensB1))).toEqual(["tb_vocab_b1"]);
+    expect(ids(d.searchMaterials(data, "grammar", teensB1))).toEqual([]);
+    expect(ids(d.searchMaterials(data, "", { ...m.noFilters, level: "b1" })).sort()).toEqual(
+      ["tb_business", "tb_ef_intermediate", "tb_speakout", "tb_vocab_b1"],
+    );
+  });
+
+  it("keeps materials without metadata only while no filter is set", () => {
+    expect(d.searchMaterials(data, "passive").lessons.map((l) => l.id)).toEqual(["les_passive_voice"]);
+    expect(d.searchMaterials(data, "passive", { ...m.noFilters, subject: "english" }).lessons).toEqual([]);
+  });
+
+  it("textbook lessons inherit their textbook's metadata", () => {
+    const lesson = data.lessons.find((l) => l.id === PS)!;
+    expect(d.materialMeta(data, lesson)).toEqual(data.textbooks.find((t) => t.id === "tb_ef_elementary")!.meta);
+  });
+
+  it("offers only levels that materials have, within the selected subject and age group", () => {
+    expect(d.filterLevelOptions(data, m.noFilters)).toEqual(["a1", "a2", "b1", "b2", "c1"]);
+    expect(d.filterLevelOptions(data, { ...m.noFilters, ageGroup: "teens" })).toEqual(["a2", "b1", "b2"]);
+    expect(d.filterLevelOptions(data, { ...m.noFilters, ageGroup: "kids" })).toEqual([]);
+    expect(d.filterLevelOptions(data, { ...m.noFilters, ageGroup: "teens", level: "b2" })).toContain("b1");
   });
 });
 

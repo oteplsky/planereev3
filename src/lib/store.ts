@@ -17,7 +17,7 @@ import type {
 
 const STORAGE_KEY = "planeree-library";
 /** Bump when the data shape changes; stored data from older versions is replaced by demo data. */
-const STORAGE_VERSION = 4;
+const STORAGE_VERSION = 5;
 
 const now = () => new Date().toISOString();
 
@@ -34,7 +34,10 @@ interface Store {
   deleteFolder(folderId: string): Outcome;
 
   // Materials
-  createTextbook(title: string, folderId: string | null): string;
+  createTextbook(input: d.NewTextbook, folderId: string | null): string;
+  updateTextbookDetails(textbookId: string, details: d.TextbookDetails): void;
+  setTextbookCoverImage(textbookId: string, image: string | null): void;
+  setUseSections(textbookId: string, useSections: boolean): void;
   createLesson(title: string, placement: d.LessonPlacement): string;
   renameMaterial(kind: Kind, id: string, title: string): void;
   moveMaterial(kind: Kind, id: string, folderId: string | null): void;
@@ -46,6 +49,7 @@ interface Store {
   addSection(textbookId: string, title: string): void;
   renameSection(textbookId: string, sectionId: string, title: string): void;
   moveSection(textbookId: string, sectionId: string, direction: -1 | 1): void;
+  moveSectionTo(textbookId: string, sectionId: string, index: number): void;
   deleteSection(textbookId: string, sectionId: string): Outcome;
   moveLessonInTextbook(
     textbookId: string,
@@ -101,11 +105,14 @@ export const useStore = create<Store>()(
         renameFolder: (id, name) => commit(d.renameFolder(data(), id, name)),
         deleteFolder: (id) => apply(d.deleteFolder(data(), id)),
 
-        createTextbook(title, folderId) {
-          const r = d.createTextbook(data(), title, folderId, now());
+        createTextbook(input, folderId) {
+          const r = d.createTextbook(data(), input, folderId, now());
           commit(r.data);
           return r.textbookId;
         },
+        updateTextbookDetails: (id, details) => commit(d.updateTextbookDetails(data(), id, details, now())),
+        setTextbookCoverImage: (id, image) => commit(d.setTextbookCoverImage(data(), id, image, now())),
+        setUseSections: (id, value) => commit(d.setUseSections(data(), id, value, now())),
         createLesson(title, placement) {
           const r = d.createLesson(data(), title, placement, now());
           commit(r.data);
@@ -134,6 +141,7 @@ export const useStore = create<Store>()(
         renameSection: (tbId, sId, title) =>
           commit(d.renameSection(data(), tbId, sId, title, now())),
         moveSection: (tbId, sId, dir) => commit(d.moveSection(data(), tbId, sId, dir, now())),
+        moveSectionTo: (tbId, sId, index) => commit(d.moveSectionTo(data(), tbId, sId, index, now())),
         deleteSection: (tbId, sId) => apply(d.deleteSection(data(), tbId, sId, now())),
         moveLessonInTextbook: (tbId, lessonId, toSectionId, index) =>
           commit(d.moveLessonInTextbook(data(), tbId, lessonId, toSectionId, now(), index)),
@@ -170,6 +178,11 @@ export const useStore = create<Store>()(
       partialize: (state) => ({ data: state.data }),
       // Prototype: incompatible stored data is replaced rather than migrated.
       migrate: () => ({ data: createDemoData() }),
+      // Same shape, older values (e.g. «Дошкольники»): mapped on load instead of replaced.
+      merge: (persisted, current) => {
+        const saved = (persisted as { data?: AppData } | undefined)?.data;
+        return { ...current, ...(saved ? { data: d.migrateData(saved) } : {}) };
+      },
       // Hydrated explicitly on the client (see StoreGate) to avoid SSR mismatches.
       skipHydration: true,
       onRehydrateStorage: () => () => useStore.setState({ hydrated: true }),

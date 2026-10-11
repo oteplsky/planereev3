@@ -10,6 +10,7 @@ import type {
   LessonSession,
   Textbook,
 } from "./types";
+import type { AgeGroup, Level } from "./meta";
 
 const at = (date: string, time = "10:00") => `${date}T${time}:00.000Z`;
 
@@ -192,7 +193,9 @@ const moreTextbookLessons: Lesson[] = [
   ] as LessonSpec[]).map((spec) => simpleLesson(spec, { textbookId: phv })),
 ];
 
-const textbooks: Textbook[] = [
+type TextbookSpec = Omit<Textbook, "description" | "meta" | "useSections" | "coverImage">;
+
+const textbookSpecs: TextbookSpec[] = [
   {
     id: efe,
     title: "English File Elementary",
@@ -278,9 +281,9 @@ const textbooks: Textbook[] = [
       { id: "sec_otc_1", title: "Unit 1 — Entertainment", order: 0,
         lessonIds: ["les_film_reviews", "les_habits"] },
       { id: "sec_otc_2", title: "Unit 2 — Sightseeing", order: 1,
-        lessonIds: ["les_relative_clauses", "les_making_recommendations"] },
+        lessonIds: ["les_relative_clauses", "les_making_recommendations", "les_third_conditional"] },
     ],
-    looseLessonIds: ["les_third_conditional"],
+    looseLessonIds: [],
     cover: "coral",
     updatedAt: at("2026-09-01"),
   },
@@ -316,6 +319,31 @@ const textbooks: Textbook[] = [
     updatedAt: at("2026-09-01"),
   },
 ];
+
+/** Every demo textbook is English; age group and level vary so the library filters have something to show. */
+const textbookMeta: Record<string, [AgeGroup, Level, description: string]> = {
+  [efe]: ["adults", "a1", "Курс для взрослых, которые начинают с нуля или возвращаются к языку."],
+  [efp]: ["adults", "a2", ""],
+  [spk]: ["adults", "b1", "Видео BBC и реальные ситуации общения."],
+  [bus]: ["adults", "b1", "Встречи, письма и переговоры."],
+  [gpa]: ["teens", "a2", "Правила и упражнения по грамматике уровня A2."],
+  [efi]: ["adults", "b1", ""],
+  [otc]: ["adults", "b2", ""],
+  [viu]: ["teens", "b1", "Тематическая лексика с упражнениями."],
+  [ilt]: ["adults", "c1", "Все три части устной части экзамена."],
+  [phv]: ["teens", "b2", ""],
+};
+
+const textbooks: Textbook[] = textbookSpecs.map((spec) => {
+  const [ageGroup, level, description] = textbookMeta[spec.id];
+  return {
+    ...spec,
+    description,
+    meta: { subject: "english", customSubject: "", ageGroup, level },
+    useSections: spec.sections.length > 0,
+    coverImage: null,
+  };
+});
 
 // ───────────── Standalone lessons ─────────────
 
