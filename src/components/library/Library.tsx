@@ -1,42 +1,40 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { BookOpen, FileText, FolderOpen, FolderOutput, SearchX } from "lucide-react";
-import { LessonStatusChips, UsedChip } from "@/components/ui/Badge";
+import { ArrowRight, BookOpen, FileText, FolderOpen, FolderOutput, SearchX } from "lucide-react";
+import { LessonStatusChips } from "@/components/ui/Badge";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
-import { Button, TextButton } from "@/components/ui/Button";
+import { Button, textButtonClass } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Select } from "@/components/ui/Field";
 import { Menu, type MenuItem } from "@/components/ui/Menu";
+import { Progress } from "@/components/ui/Progress";
 import { SearchField } from "@/components/ui/SearchField";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { toast } from "@/components/ui/Toast";
 import { AddTile, FolderCard, MaterialCard } from "./Cards";
 import { LibraryDialogs, requestDelete, type DialogState } from "./LibraryDialogs";
-import { contextHref } from "@/lib/context";
+import { MetaFilterBar, useMetaFilters } from "./MetaFilterBar";
+import { catalog } from "@/lib/catalog";
+import { catalogHref, contextHref } from "@/lib/context";
 import {
-  filterLevelOptions,
   folderItemCount,
   folderPath,
   homeworkStatusForLearner,
   lessonStatusForLearner,
+  libraryAuthors,
   libraryLocation,
   searchMaterials,
+  sortByRecentUse,
+  textbookFromCatalog,
   textbookLessonCount,
-  textbookUsedByLearner,
+  textbookProgress,
+  type SourceFilter,
 } from "@/lib/domain";
-import {
-  AGE_GROUPS,
-  ageGroupLabels,
-  hasActiveFilters,
-  levelLabels,
-  noFilters,
-  SUBJECTS,
-  subjectLabels,
-  type MetaFilters,
-} from "@/lib/meta";
-import { count, MATERIALS } from "@/lib/format";
+import { hasActiveFilters, type MetaFilters } from "@/lib/meta";
+import { count, MATERIALS, TEXTBOOKS } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { Learner } from "@/lib/types";
 
@@ -76,7 +74,8 @@ export function Library({ learner, folderId }: LibraryProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
-  const [meta, setMeta] = useState<MetaFilters>(noFilters);
+  const { meta, setMetaFilter, resetMeta, levelOptions } = useMetaFilters(data);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(null);
   const [dialog, setDialog] = useState<DialogState>(null);
 
   const editable = learner === null;
@@ -86,22 +85,19 @@ export function Library({ learner, folderId }: LibraryProps) {
   const path = folderPath(data, folder?.id ?? null);
 
   const location = libraryLocation(data, folder?.id ?? null);
-  const metaFiltering = hasActiveFilters(meta);
+  const authors = libraryAuthors(data);
+  const metaFiltering = hasActiveFilters(meta) || sourceFilter !== null;
   const searching = query.trim() !== "" || metaFiltering;
-  const source = searching ? searchMaterials(data, query, meta) : location;
-  const levelOptions = filterLevelOptions(data, meta);
-  const setMetaFilter = (patch: Partial<MetaFilters>) =>
-    setMeta((prev) => {
-      const next = { ...prev, ...patch };
-      // A level the new subject / age group can't have would silently hide everything.
-      if (next.level && !filterLevelOptions(data, next).includes(next.level)) next.level = null;
-      return next;
-    });
+  const results = searching ? searchMaterials(data, query, meta, sourceFilter) : location;
+  const resetFilters = () => {
+    resetMeta();
+    setSourceFilter(null);
+  };
 
   // Folders live only at the root and never appear in search results.
   const folders = !searching && !folder && filter === "all" ? location.folders : [];
-  const textbooks = filter === "lessons" ? [] : source.textbooks;
-  const lessons = filter === "textbooks" ? [] : source.lessons;
+  const textbooks = filter === "lessons" ? [] : learnerId ? sortByRecentUse(data, learnerId, results.textbooks) : results.textbooks;
+  const lessons = filter === "textbooks" ? [] : results.lessons;
   const isFiltering = searching || filter !== "all";
   const nothingFound = isFiltering && folders.length + textbooks.length + lessons.length === 0;
   const locationEmpty =
@@ -155,36 +151,20 @@ export function Library({ learner, folderId }: LibraryProps) {
           <SegmentedControl label="Тип материала" options={filterOptions} value={filter} onChange={setFilter} />
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <Select
-            aria-label="Предмет"
-            placeholder="Предмет"
-            value={meta.subject}
-            options={SUBJECTS.map((v) => ({ value: v, label: subjectLabels[v] }))}
-            onChange={(subject) => setMetaFilter({ subject })}
-            highlighted={meta.subject !== null}
-            className="w-full sm:w-56"
-          />
-          <Select
-            aria-label="Возрастная группа"
-            placeholder="Возрастная группа"
-            value={meta.ageGroup}
-            options={AGE_GROUPS.map((v) => ({ value: v, label: ageGroupLabels[v] }))}
-            onChange={(ageGroup) => setMetaFilter({ ageGroup })}
-            highlighted={meta.ageGroup !== null}
-            className="w-full sm:w-52"
-          />
-          <Select
-            aria-label="Уровень"
-            placeholder="Уровень"
-            value={meta.level}
-            options={levelOptions.map((v) => ({ value: v, label: levelLabels[v] }))}
-            onChange={(level) => setMetaFilter({ level })}
-            highlighted={meta.level !== null}
-            className="w-full sm:w-48"
-          />
-          {metaFiltering && <TextButton onClick={() => setMeta(noFilters)}>Сбросить фильтры</TextButton>}
-        </div>
+        <MetaFilterBar meta={meta} levelOptions={levelOptions} onChange={setMetaFilter} active={metaFiltering} onReset={resetFilters}>
+          {/* Only once the library has materials by someone else: with one source there is nothing to pick. */}
+          {authors.length > 0 && (
+            <Select
+              aria-label="Источник"
+              placeholder="Источник"
+              value={sourceFilter}
+              options={[{ value: "mine", label: "Мои материалы" }, ...authors.map((a) => ({ value: a.id, label: a.name }))]}
+              onChange={setSourceFilter}
+              highlighted={sourceFilter !== null}
+              className="w-full sm:w-48"
+            />
+          )}
+        </MetaFilterBar>
       </div>
 
       {nothingFound ? (
@@ -197,7 +177,7 @@ export function Library({ learner, folderId }: LibraryProps) {
               onClick={() => {
                 setQuery("");
                 setFilter("all");
-                setMeta(noFilters);
+                resetFilters();
               }}
             >
               Сбросить
@@ -240,14 +220,16 @@ export function Library({ learner, folderId }: LibraryProps) {
                 {editable && !isFiltering && <AddMaterial onSelect={(kind) => setDialog({ type: "create", kind })} />}
                 {textbooks.map((t) => {
                   const target = { kind: "textbook" as const, id: t.id, title: t.title };
+                  const progress = learnerId ? textbookProgress(data, learnerId, t) : null;
                   return (
                     <MaterialCard
                       key={t.id}
                       href={contextHref(`/textbook/${t.id}`, learnerId)}
                       kind="textbook"
                       title={t.title}
+                      caption={t.author?.name}
                       lessonCount={textbookLessonCount(t)}
-                      badge={learnerId && textbookUsedByLearner(data, learnerId, t) && <UsedChip />}
+                      badge={progress && <Progress value={progress.completed} total={progress.total} />}
                       cover={t.cover}
                       coverImage={t.coverImage}
                       actions={
@@ -305,6 +287,8 @@ export function Library({ learner, folderId }: LibraryProps) {
         </>
       )}
 
+      {searching && sourceFilter !== "mine" && <CatalogHint query={query} meta={meta} learnerId={learnerId} />}
+
       {editable && (
         <LibraryDialogs
           state={dialog}
@@ -315,6 +299,28 @@ export function Library({ learner, folderId }: LibraryProps) {
         />
       )}
     </section>
+  );
+}
+
+/**
+ * While searching, Planeree's textbooks that match and aren't in the library yet: the moment a teacher
+ * looks for something they don't have. Opens the catalog with the same search.
+ */
+function CatalogHint({ query, meta, learnerId }: { query: string; meta: MetaFilters; learnerId: string | null }) {
+  const data = useStore((s) => s.data);
+  const found = searchMaterials(catalog, query, meta).textbooks.filter((t) => !textbookFromCatalog(data, t.id));
+  if (found.length === 0) return null;
+  const href = catalogHref("/catalog", learnerId, {
+    q: query.trim(),
+    subject: meta.subject,
+    ageGroup: meta.ageGroup,
+    level: meta.level,
+  });
+  return (
+    <Link href={href} className={`${textButtonClass} -mt-2`}>
+      В каталоге: {count(found.length, TEXTBOOKS)}
+      <ArrowRight size={18} strokeWidth={1.75} aria-hidden />
+    </Link>
   );
 }
 

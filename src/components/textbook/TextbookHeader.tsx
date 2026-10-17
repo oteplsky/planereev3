@@ -2,10 +2,13 @@
 
 import { useRef, useState } from "react";
 import { Camera, Copy, Ellipsis, FolderInput, Trash2 } from "lucide-react";
+import { AuthorLine } from "@/components/library/AuthorLine";
 import { Cover } from "@/components/library/Cover";
 import { IconButton, TextButton } from "@/components/ui/Button";
 import { Menu } from "@/components/ui/Menu";
+import { Progress } from "@/components/ui/Progress";
 import { toast } from "@/components/ui/Toast";
+import type { TextbookProgress } from "@/lib/domain";
 import { metaSummary } from "@/lib/meta";
 import { useStore } from "@/lib/store";
 import type { Textbook } from "@/lib/types";
@@ -18,10 +21,12 @@ interface TextbookHeaderProps {
   editable: boolean;
   onMove: () => void;
   onDelete: () => void;
+  /** In a learner context: how far the learner has got. */
+  progress?: TextbookProgress | null;
 }
 
 /** Cover, title, description and metadata. In the global context every field is edited in place and saved at once. */
-export function TextbookHeader({ textbook, editable, onMove, onDelete }: TextbookHeaderProps) {
+export function TextbookHeader({ textbook, editable, onMove, onDelete, progress }: TextbookHeaderProps) {
   const duplicateMaterial = useStore((s) => s.duplicateMaterial);
   const updateTextbookDetails = useStore((s) => s.updateTextbookDetails);
 
@@ -34,8 +39,10 @@ export function TextbookHeader({ textbook, editable, onMove, onDelete }: Textboo
         </div>
         <div className="min-w-0 flex-1">
           <h1 className="text-h1">{textbook.title}</h1>
+          <AuthorLine author={textbook.author} className="mt-2" />
           {summary && <p className="mt-2 font-semibold text-ink-secondary">{summary}</p>}
           {textbook.description && <p className="mt-3 max-w-2xl whitespace-pre-line">{textbook.description}</p>}
+          {progress && <Progress value={progress.completed} total={progress.total} className="mt-4 max-w-xs" />}
         </div>
       </div>
     );
@@ -68,6 +75,7 @@ export function TextbookHeader({ textbook, editable, onMove, onDelete }: Textboo
             )}
           />
         </div>
+        <AuthorLine author={textbook.author} className="-mt-2" />
         <DescriptionField key={textbook.description} textbook={textbook} />
         <MetaFields
           meta={textbook.meta}

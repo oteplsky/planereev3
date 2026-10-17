@@ -39,6 +39,21 @@ Browsing never creates one (`resolveLesson` is read-only). Once created, a learn
 is independent: later global edits don't reach it, and there is no sync or reset.
 The UI never says "copy" — it says «Общий материал» and «Версия для Анны».
 
+## A learner's textbooks
+
+In a learner context, textbooks used with the learner come first in the library, most recently used first.
+Their cards and the textbook page show progress — finished lessons out of all — and the next lesson: the first
+untouched one after the furthest lesson taught (`textbookProgress`). Lessons skipped earlier are not suggested.
+With no lesson in progress, that next lesson takes the current-lesson slot with «Начать урок».
+
+## The catalog
+
+«Каталог» lists Planeree's textbooks, the same for every teacher. «Добавить в библиотеку» gives the
+teacher an independent copy at the library root (`addTextbookFromCatalog`): the author stays, and later
+catalog changes never reach it. The catalog ignores the learner context; a teacher who came from a learner
+gets `?from=` — breadcrumbs back and «Открыть для Анны» — and nothing else changes.
+Materials by someone else show their author; the library's «Источник» filter appears once there are any.
+
 Deleting a textbook, section or lesson is blocked (with an explanation) when it would lose
 learner history. Deleting a folder never deletes materials: its contents move to the library root.
 
@@ -52,12 +67,14 @@ src/lib/
   domain.test.ts  Acceptance scenarios 3–7, deletion rules, demo data integrity
   store.ts        Zustand store persisted to localStorage; thin wrapper over domain.ts
   demo-data.ts    Learners, folders, textbooks, lessons and histories (spec §14)
+  catalog.ts      The public catalog: Planeree's textbooks, read-only and not persisted
   context.ts      Learner context from `?learner=` and link helper
   learners.ts     Initials, labels, genitive names («для Анны»)
   format.ts       Russian plurals and dates
 src/components/
   ui/             UI kit primitives: Button, Menu, Dialog, Badge, SegmentedControl, …
   library/        The one Library component, shared by global and learner contexts
+  catalog/        Catalog grid, read-only textbook and lesson previews, «Добавить в библиотеку»
   textbook/       Textbook: creation form, editable header (cover, metadata), flat or sectioned structure
   learner/        Learner workspace: current lesson, lesson history chips with homework marks
   lesson/         Lesson placeholder: blocks, editor, homework dialog

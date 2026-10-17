@@ -4,6 +4,7 @@
 import type {
   AppData,
   AccentColor,
+  Author,
   BlockReason,
   Folder,
   HomeworkAssignment,
@@ -279,10 +280,51 @@ export function homeworkStatusForLearner(data: AppData, learnerId: string, lesso
   return ll ? homeworkSummary(data.homework.filter((h) => h.learnerLessonId === ll.id)) : null;
 }
 
-/** True when any lesson of the textbook was taught to or set as homework for the learner. */
-export function textbookUsedByLearner(data: AppData, learnerId: string, textbook: Textbook): boolean {
-  const ids = [...textbook.looseLessonIds, ...textbook.sections.flatMap((s) => s.lessonIds)];
-  return ids.some((id) => findLearnerLesson(data, learnerId, id));
+/** A learner's way through one textbook: how far they've got and what comes next. */
+export interface TextbookProgress {
+  textbook: Textbook;
+  total: number;
+  /** Lessons whose latest session with the learner is finished. */
+  completed: number;
+  /**
+   * The first untouched lesson after the furthest one taught (started or finished). Lessons the teacher
+   * skipped earlier aren't suggested: skipping is usually deliberate. Null when nothing is left after it.
+   */
+  next: Lesson | null;
+  lastActivityAt: string;
+}
+
+/** Null when no lesson of the textbook has been taught to or set as homework for the learner. */
+export function textbookProgress(data: AppData, learnerId: string, textbook: Textbook): TextbookProgress | null {
+  const { sections, loose } = textbookLessons(data, textbook);
+  const ordered = textbook.useSections ? sections.flatMap((s) => s.lessons) : loose;
+  const entries = getLessonHistory(data, learnerId).filter((e) => e.textbook?.id === textbook.id);
+  if (entries.length === 0) return null;
+
+  const status = (lessonId: string) => entries.find((e) => e.lesson.id === lessonId)?.status ?? null;
+  const furthest = ordered.findLastIndex((l) => status(l.id) !== null);
+  return {
+    textbook,
+    total: ordered.length,
+    completed: ordered.filter((l) => status(l.id) === "completed").length,
+    next: ordered.slice(furthest + 1).find((l) => status(l.id) === null) ?? null,
+    lastActivityAt: entries[0].lastActivityAt,
+  };
+}
+
+/** Textbooks used with the learner, most recently active first. */
+export function learnerTextbooks(data: AppData, learnerId: string): TextbookProgress[] {
+  return data.textbooks
+    .map((t) => textbookProgress(data, learnerId, t))
+    .filter((p) => p !== null)
+    .sort(latestFirst);
+}
+
+/** In a learner context: textbooks used with the learner first, most recent first; the rest keep their order. */
+export function sortByRecentUse(data: AppData, learnerId: string, textbooks: Textbook[]): Textbook[] {
+  const rank = new Map(learnerTextbooks(data, learnerId).map((p, i) => [p.textbook.id, i]));
+  const at = (t: Textbook) => rank.get(t.id) ?? Infinity;
+  return [...textbooks].sort((a, b) => at(a) - at(b));
 }
 
 /** Where the learner is with this lesson, if they've had it: shown on cards in a learner context. */
@@ -440,10 +482,34 @@ export function folderPath(data: AppData, folderId: string | null): Folder[] {
   return path;
 }
 
+/** A set of materials: the teacher's library or the catalog. */
+export type Materials = Pick<AppData, "textbooks" | "lessons">;
+
 /** Metadata that applies to a material. Textbook lessons inherit their textbook's; standalone lessons have none yet. */
-export function materialMeta(data: AppData, item: Textbook | Lesson): MaterialMeta | null {
+export function materialMeta(data: Materials, item: Textbook | Lesson): MaterialMeta | null {
   if ("meta" in item) return item.meta;
   return data.textbooks.find((t) => t.id === item.textbookId)?.meta ?? null;
+}
+
+/** Who made a material; null = the teacher. Textbook lessons inherit their textbook's author. */
+export function materialAuthor(data: Materials, item: Textbook | Lesson): Author | null {
+  if ("author" in item) return item.author;
+  return data.textbooks.find((t) => t.id === item.textbookId)?.author ?? null;
+}
+
+/** «Источник» filter: the teacher's own materials, or one author's. Null = everything. */
+export type SourceFilter = "mine" | (string & {}) | null;
+
+export function matchesSource(author: Author | null, source: SourceFilter): boolean {
+  if (source === null) return true;
+  return source === "mine" ? author === null : author?.id === source;
+}
+
+/** Authors other than the teacher whose materials are in the library, by name. */
+export function libraryAuthors(data: Materials): Author[] {
+  const byId = new Map<string, Author>();
+  for (const t of data.textbooks) if (t.author) byId.set(t.author.id, t.author);
+  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, "ru"));
 }
 
 /**
@@ -451,11 +517,18 @@ export function materialMeta(data: AppData, item: Textbook | Lesson): MaterialMe
  * lessons as one flat list. Lessons inside textbooks are found through their textbook.
  * Filters combine with each other and with the query (AND).
  */
-export function searchMaterials(data: AppData, query: string, filters: MetaFilters = noFilters) {
+export function searchMaterials(
+  data: Materials,
+  query: string,
+  filters: MetaFilters = noFilters,
+  source: SourceFilter = null,
+) {
   const q = query.trim().toLocaleLowerCase("ru");
   const byTitle = (a: { title: string }, b: { title: string }) => a.title.localeCompare(b.title, "ru");
   const hit = (item: Textbook | Lesson) =>
-    item.title.toLocaleLowerCase("ru").includes(q) && matchesFilters(materialMeta(data, item), filters);
+    item.title.toLocaleLowerCase("ru").includes(q) &&
+    matchesFilters(materialMeta(data, item), filters) &&
+    matchesSource(materialAuthor(data, item), source);
   return {
     textbooks: data.textbooks.filter(hit).sort(byTitle),
     lessons: data.lessons.filter((l) => l.textbookId === null && hit(l)).sort(byTitle),
@@ -466,7 +539,7 @@ export function searchMaterials(data: AppData, query: string, filters: MetaFilte
  * «Уровень» filter options: levels that materials actually have, among materials matching the
  * selected subject and age group (the level filter itself is ignored, so its own choice stays listed).
  */
-export function filterLevelOptions(data: AppData, filters: MetaFilters): Level[] {
+export function filterLevelOptions(data: Materials, filters: MetaFilters): Level[] {
   const scope = { ...filters, level: null };
   return sortLevels(
     data.textbooks.filter((t) => matchesFilters(t.meta, scope)).flatMap((t) => (t.meta.level ? [t.meta.level] : [])),
@@ -475,7 +548,15 @@ export function filterLevelOptions(data: AppData, filters: MetaFilters): Level[]
 
 /** Saved data from earlier prototype versions, brought up to the current metadata options. */
 export function migrateData(data: AppData): AppData {
-  return { ...data, textbooks: data.textbooks.map((t) => ({ ...t, meta: migrateMeta(t.meta) })) };
+  return {
+    ...data,
+    textbooks: data.textbooks.map((t) => ({
+      ...t,
+      meta: migrateMeta(t.meta),
+      author: t.author ?? null,
+      catalogSourceId: t.catalogSourceId ?? null,
+    })),
+  };
 }
 
 /** What one library location contains. Textbook lessons are not listed here. */
@@ -520,6 +601,8 @@ export function createTextbook(
     looseLessonIds: [],
     cover: null,
     coverImage: null,
+    author: null,
+    catalogSourceId: null,
     updatedAt: now,
   });
   return { data: next, textbookId };
@@ -706,10 +789,44 @@ export function duplicateTextbook(
   const source = data.textbooks.find((t) => t.id === textbookId);
   if (!source) return { data, textbookId };
   const next = clone(data);
+  const newTbId = copyTextbookInto(next, data, source, { title: copyTitle(source.title) }, now);
+  return { data: next, textbookId: newTbId };
+}
+
+/**
+ * «Добавить в библиотеку»: the teacher gets their own copy of a catalog textbook at the library root.
+ * The author stays; nothing links back except `catalogSourceId`, so later catalog changes never reach it.
+ */
+export function addTextbookFromCatalog(
+  data: AppData,
+  catalog: Materials,
+  catalogTextbookId: string,
+  now: string,
+): { data: AppData; textbookId: string | null } {
+  const source = catalog.textbooks.find((t) => t.id === catalogTextbookId);
+  if (!source) return { data, textbookId: null };
+  const next = clone(data);
+  const textbookId = copyTextbookInto(next, catalog, source, { folderId: null, catalogSourceId: source.id }, now);
+  return { data: next, textbookId };
+}
+
+/** The teacher's copy of a catalog textbook, if they have added it. */
+export function textbookFromCatalog(data: AppData, catalogTextbookId: string): Textbook | undefined {
+  return data.textbooks.find((t) => t.catalogSourceId === catalogTextbookId);
+}
+
+/** Copies a textbook and its lessons from `from` into `next` (mutated) with fresh ids. */
+function copyTextbookInto(
+  next: AppData,
+  from: Materials,
+  source: Textbook,
+  overrides: Partial<Textbook>,
+  now: string,
+): string {
   const newTbId = makeId("tb");
   const idMap = new Map<string, string>();
 
-  for (const lesson of data.lessons.filter((l) => l.textbookId === textbookId)) {
+  for (const lesson of from.lessons.filter((l) => l.textbookId === source.id)) {
     const newLessonId = makeId("les");
     idMap.set(lesson.id, newLessonId);
     next.lessons.push({
@@ -724,16 +841,16 @@ export function duplicateTextbook(
   next.textbooks.push({
     ...clone(source),
     id: newTbId,
-    title: copyTitle(source.title),
     sections: source.sections.map((s) => ({
       ...s,
       id: makeId("sec"),
       lessonIds: remap(s.lessonIds),
     })),
     looseLessonIds: remap(source.looseLessonIds),
+    ...overrides,
     updatedAt: now,
   });
-  return { data: next, textbookId: newTbId };
+  return newTbId;
 }
 
 /** True when any learner has their own version (and so history or homework) of the lesson. */
@@ -955,7 +1072,7 @@ export function removeLessonFromTextbook(
 }
 
 /** Lessons of a textbook in display order. */
-export function textbookLessons(data: AppData, textbook: Textbook) {
+export function textbookLessons(data: Materials, textbook: Textbook) {
   const byId = (id: string) => data.lessons.find((l) => l.id === id);
   return {
     sections: [...textbook.sections]

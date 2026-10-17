@@ -41,6 +41,12 @@ export interface Folder {
   parentFolderId: string | null;
 }
 
+/** Who made a material. Names only for now; public profiles come with teacher-made materials. */
+export interface Author {
+  id: string;
+  name: string;
+}
+
 export interface TextbookSection {
   id: string;
   title: string;
@@ -67,6 +73,10 @@ export interface Textbook {
   cover: AccentColor | null;
   /** Uploaded cover as a data URL; takes precedence over `cover`. */
   coverImage: string | null;
+  /** Null = made by the teacher. Kept when a textbook is added from the catalog or duplicated. */
+  author: Author | null;
+  /** The catalog textbook this one was added from. The copy is independent: catalog updates don't reach it. */
+  catalogSourceId: string | null;
   updatedAt: string;
 }
 

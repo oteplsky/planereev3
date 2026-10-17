@@ -11,6 +11,7 @@ import type {
   Textbook,
 } from "./types";
 import type { AgeGroup, Level } from "./meta";
+import { PLANEREE } from "./catalog";
 
 const at = (date: string, time = "10:00") => `${date}T${time}:00.000Z`;
 
@@ -193,7 +194,7 @@ const moreTextbookLessons: Lesson[] = [
   ] as LessonSpec[]).map((spec) => simpleLesson(spec, { textbookId: phv })),
 ];
 
-type TextbookSpec = Omit<Textbook, "description" | "meta" | "useSections" | "coverImage">;
+type TextbookSpec = Omit<Textbook, "description" | "meta" | "useSections" | "coverImage" | "author" | "catalogSourceId">;
 
 const textbookSpecs: TextbookSpec[] = [
   {
@@ -331,7 +332,7 @@ const textbookMeta: Record<string, [AgeGroup, Level, description: string]> = {
   [otc]: ["adults", "b2", ""],
   [viu]: ["teens", "b1", "Тематическая лексика с упражнениями."],
   [ilt]: ["adults", "c1", "Все три части устной части экзамена."],
-  [phv]: ["teens", "b2", ""],
+  [phv]: ["teens", "b2", "Фразовые глаголы по темам: путешествия, работа, отношения, быт."],
 };
 
 const textbooks: Textbook[] = textbookSpecs.map((spec) => {
@@ -342,6 +343,8 @@ const textbooks: Textbook[] = textbookSpecs.map((spec) => {
     meta: { subject: "english", customSubject: "", ageGroup, level },
     useSections: spec.sections.length > 0,
     coverImage: null,
+    // One textbook was added from the catalog, so the library shows a material by another author.
+    ...(spec.id === phv ? { author: PLANEREE, catalogSourceId: "cat_phrasal" } : { author: null, catalogSourceId: null }),
   };
 });
 

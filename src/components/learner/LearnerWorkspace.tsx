@@ -2,27 +2,39 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
-import { homeworkStatus } from "@/components/ui/Badge";
+import Link from "next/link";
+import { homeworkStatus, LessonStatusChips } from "@/components/ui/Badge";
 import { FilterChips } from "@/components/ui/FilterChips";
-import { getCurrentSession, getLessonHistory, type HistoryEntry } from "@/lib/domain";
+import { contextHref } from "@/lib/context";
+import { getCurrentSession, getLessonHistory, learnerTextbooks, type HistoryEntry } from "@/lib/domain";
+import { formatDate } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { HomeworkStatus, Learner } from "@/lib/types";
 import { CurrentLesson, HistoryChip } from "./LearnerCards";
+import { NextLesson } from "./NextLesson";
 
 /** At most this many recent lessons, and only as many as fit on one row; the rest is in the modal. */
 const RECENT = 5;
 const GAP = 8;
 
-/** Learner layer above the shared library (spec §7.1): current lesson and lesson history with homework marks. */
+/**
+ * Learner layer above the shared library (spec §7.1): the current lesson — or, when none is in progress,
+ * the next one — then lesson history with homework marks.
+ */
 export function LearnerWorkspace({ learner }: { learner: Learner }) {
   const data = useStore((s) => s.data);
   const [showAll, setShowAll] = useState(false);
   const current = getCurrentSession(data, learner.id);
   const history = getLessonHistory(data, learner.id);
+  const upNext = learnerTextbooks(data, learner.id).find((p) => p.next);
 
   return (
     <div className="flex flex-col gap-10">
-      <CurrentLesson session={current} />
+      {!current && upNext?.next ? (
+        <NextLesson learner={learner} progress={upNext} lesson={upNext.next} />
+      ) : (
+        <CurrentLesson session={current} />
+      )}
 
       {history.length > 0 && (
         <section aria-labelledby="history-heading">
@@ -99,26 +111,16 @@ function RecentRow({ history, learnerId, onMore }: { history: HistoryEntry[]; le
           <li>{more(`Ещё ${history.length}`)}</li>
         </ul>
       </div>
-      <ChipList entries={history.slice(0, fit)} learnerId={learnerId} nowrap>
+      <ChipList entries={history.slice(0, fit)} learnerId={learnerId}>
         {hidden > 0 && <li className="shrink-0">{more(`Ещё ${hidden}`)}</li>}
       </ChipList>
     </div>
   );
 }
 
-function ChipList({
-  entries,
-  learnerId,
-  nowrap = false,
-  children,
-}: {
-  entries: HistoryEntry[];
-  learnerId: string;
-  nowrap?: boolean;
-  children?: React.ReactNode;
-}) {
+function ChipList({ entries, learnerId, children }: { entries: HistoryEntry[]; learnerId: string; children?: React.ReactNode }) {
   return (
-    <ul className={`flex gap-2 ${nowrap ? "" : "flex-wrap"}`}>
+    <ul className="flex gap-2">
       {entries.map((entry) => (
         <li key={entry.learnerLesson.id} className="max-w-full min-w-0">
           <HistoryChip entry={entry} learnerId={learnerId} />
@@ -151,9 +153,31 @@ function FullHistory({ history, learnerId }: { history: HistoryEntry[]; learnerI
           ]}
         />
       )}
-      <div className="max-h-[60vh] overflow-y-auto">
-        <ChipList entries={shown} learnerId={learnerId} />
-      </div>
+      <ul className="-mx-2 max-h-[60vh] divide-y divide-line overflow-y-auto">
+        {shown.map((entry) => (
+          <li key={entry.learnerLesson.id}>
+            <HistoryRow entry={entry} learnerId={learnerId} />
+          </li>
+        ))}
+      </ul>
     </div>
+  );
+}
+
+/** A line in the full history: title, where it's from and when, then the lesson and homework chips. */
+function HistoryRow({ entry, learnerId }: { entry: HistoryEntry; learnerId: string }) {
+  return (
+    <Link
+      href={contextHref(`/lesson/${entry.lesson.id}`, learnerId)}
+      className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md px-2 py-3 transition-colors duration-[120ms] hover:bg-hover"
+    >
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-bold">{entry.lesson.title}</p>
+        <p className="truncate text-caption text-ink-secondary">
+          {[entry.textbook?.title, formatDate(entry.lastActivityAt)].filter(Boolean).join(" · ")}
+        </p>
+      </div>
+      <LessonStatusChips lesson={entry.status} homework={entry.homework} />
+    </Link>
   );
 }

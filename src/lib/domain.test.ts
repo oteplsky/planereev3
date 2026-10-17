@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as d from "./domain";
+import { catalog, PLANEREE } from "./catalog";
 import { createDemoData } from "./demo-data";
 import { groupsOf } from "./learners";
 import * as m from "./meta";
@@ -576,5 +577,135 @@ describe("demo data integrity", () => {
     expect(new Set(data.homework.map((h) => h.status))).toEqual(
       new Set(["assigned", "completed", "reviewed"]),
     );
+  });
+});
+
+describe("catalog", () => {
+  const SPEAKING = "cat_speaking_club";
+
+  it("adding a catalog textbook gives the teacher their own copy at the library root", () => {
+    const data = createDemoData();
+    const r = d.addTextbookFromCatalog(data, catalog, SPEAKING, T1);
+    const source = catalog.textbooks.find((t) => t.id === SPEAKING)!;
+    const copy = r.data.textbooks.find((t) => t.id === r.textbookId)!;
+    expect(copy.id).not.toBe(SPEAKING);
+    expect(copy.title).toBe(source.title);
+    expect(copy.author).toEqual(PLANEREE);
+    expect(copy.catalogSourceId).toBe(SPEAKING);
+    expect(copy.folderId).toBeNull();
+    expect(d.textbookFromCatalog(r.data, SPEAKING)?.id).toBe(copy.id);
+
+    const copied = r.data.lessons.filter((l) => l.textbookId === copy.id);
+    expect(copied).toHaveLength(d.textbookLessonCount(source));
+    expect(copied.every((l) => !l.id.startsWith(SPEAKING))).toBe(true);
+    expect(copy.sections.flatMap((s) => s.lessonIds).sort()).toEqual(copied.map((l) => l.id).sort());
+  });
+
+  it("the copy is independent of the catalog", () => {
+    const r = d.addTextbookFromCatalog(createDemoData(), catalog, SPEAKING, T1);
+    const lessonId = r.data.lessons.find((l) => l.textbookId === r.textbookId)!.id;
+    const edited = d.updateGlobalLessonContent(r.data, lessonId, { blocks: [] }, T2);
+    const catalogLesson = catalog.lessons.find((l) => l.textbookId === SPEAKING)!;
+    expect(catalogLesson.content.blocks.length).toBeGreaterThan(0);
+    expect(edited.lessons.find((l) => l.id === lessonId)!.content.blocks).toHaveLength(0);
+  });
+
+  it("an unknown catalog textbook changes nothing", () => {
+    const data = createDemoData();
+    const r = d.addTextbookFromCatalog(data, catalog, "cat_missing", T1);
+    expect(r.textbookId).toBeNull();
+    expect(r.data).toBe(data);
+  });
+
+  it("every catalog textbook is Planeree's and its lessons exist", () => {
+    for (const t of catalog.textbooks) {
+      expect(t.author).toEqual(PLANEREE);
+      expect(m.isMetaComplete(t.meta)).toBe(true);
+      const { sections, loose } = d.textbookLessons(catalog, t);
+      expect([...sections.flatMap((s) => s.lessons), ...loose]).toHaveLength(d.textbookLessonCount(t));
+    }
+  });
+
+  it("demo materials from the catalog point at a real catalog textbook", () => {
+    for (const t of createDemoData().textbooks.filter((t) => t.catalogSourceId)) {
+      expect(catalog.textbooks.some((c) => c.id === t.catalogSourceId)).toBe(true);
+    }
+  });
+});
+
+describe("source filter", () => {
+  it("separates the teacher's materials from other authors'", () => {
+    const data = createDemoData();
+    const planeree = d.searchMaterials(data, "", m.noFilters, PLANEREE.id);
+    const mine = d.searchMaterials(data, "", m.noFilters, "mine");
+    expect(planeree.textbooks.map((t) => t.id)).toEqual(["tb_phrasal"]);
+    expect(planeree.lessons).toHaveLength(0);
+    expect(mine.textbooks.some((t) => t.id === "tb_phrasal")).toBe(false);
+    expect(mine.lessons.length).toBeGreaterThan(0);
+    expect(d.libraryAuthors(data)).toEqual([PLANEREE]);
+  });
+});
+
+describe("textbook progress for a learner", () => {
+  // English File Elementary, in order: introductions, present simple, daily routines, past simple, my weekend.
+  const EFE = "tb_ef_elementary";
+  const fresh = (): AppData => {
+    const data = createDemoData();
+    const mine = new Set(data.learnerLessons.filter((ll) => ll.learnerId === "liza").map((ll) => ll.id));
+    return {
+      ...data,
+      learnerLessons: data.learnerLessons.filter((ll) => !mine.has(ll.id)),
+      sessions: data.sessions.filter((s) => !mine.has(s.learnerLessonId)),
+      homework: data.homework.filter((h) => !mine.has(h.learnerLessonId)),
+    };
+  };
+  const teach = (data: AppData, lessonId: string, at: string, finish = true) => {
+    const r = d.startLesson(data, "liza", lessonId, at);
+    return finish ? d.completeSession(r.data, r.session.id, at) : r.data;
+  };
+  const progress = (data: AppData) => d.textbookProgress(data, "liza", data.textbooks.find((t) => t.id === EFE)!);
+
+  it("is null until the textbook is used with the learner", () => {
+    expect(progress(fresh())).toBeNull();
+    expect(d.learnerTextbooks(fresh(), "liza")).toHaveLength(0);
+  });
+
+  it("counts finished lessons and suggests the one after the furthest taught", () => {
+    let data = teach(fresh(), "les_introductions", T1);
+    data = teach(data, "les_present_simple", T2);
+    expect(progress(data)).toMatchObject({ total: 5, completed: 2 });
+    expect(progress(data)!.next?.id).toBe("les_daily_routines");
+  });
+
+  it("does not go back to lessons skipped earlier", () => {
+    const data = teach(fresh(), "les_past_simple", T1);
+    expect(progress(data)!.next?.id).toBe("les_my_weekend");
+  });
+
+  it("a lesson in progress counts as reached but not finished", () => {
+    const data = teach(fresh(), "les_introductions", T1, false);
+    expect(progress(data)).toMatchObject({ completed: 0 });
+    expect(progress(data)!.next?.id).toBe("les_present_simple");
+  });
+
+  it("nothing is next after the last lesson", () => {
+    const data = teach(fresh(), "les_my_weekend", T1);
+    expect(progress(data)!.next).toBeNull();
+  });
+
+  it("lists the learner's textbooks, most recently active first", () => {
+    let data = teach(fresh(), "les_introductions", T1);
+    data = teach(data, "les_present_continuous", T2);
+    expect(d.learnerTextbooks(data, "liza").map((p) => p.textbook.id)).toEqual(["tb_ef_preint", EFE]);
+  });
+});
+
+describe("library order in a learner context", () => {
+  it("puts textbooks used with the learner first, most recent first", () => {
+    const data = createDemoData();
+    const used = d.learnerTextbooks(data, "maxim").map((p) => p.textbook.id);
+    const sorted = d.sortByRecentUse(data, "maxim", data.textbooks).map((t) => t.id);
+    expect(sorted.slice(0, used.length)).toEqual(used);
+    expect(sorted).toHaveLength(data.textbooks.length);
   });
 });

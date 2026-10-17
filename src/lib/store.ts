@@ -5,6 +5,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import * as d from "./domain";
+import { catalog } from "./catalog";
 import { createDemoData } from "./demo-data";
 import type {
   AccentColor,
@@ -17,7 +18,7 @@ import type {
 
 const STORAGE_KEY = "planeree-library";
 /** Bump when the data shape changes; stored data from older versions is replaced by demo data. */
-const STORAGE_VERSION = 5;
+const STORAGE_VERSION = 6;
 
 const now = () => new Date().toISOString();
 
@@ -43,6 +44,8 @@ interface Store {
   moveMaterial(kind: Kind, id: string, folderId: string | null): void;
   setCover(kind: Kind, id: string, cover: AccentColor | null): void;
   duplicateMaterial(kind: Kind, id: string): string;
+  /** Returns the new textbook's id in the teacher's library. */
+  addTextbookFromCatalog(catalogTextbookId: string): string | null;
   deleteMaterial(kind: Kind, id: string): Outcome;
 
   // Textbook structure
@@ -131,6 +134,11 @@ export const useStore = create<Store>()(
             return r.lessonId;
           }
           const r = d.duplicateTextbook(data(), id, now());
+          commit(r.data);
+          return r.textbookId;
+        },
+        addTextbookFromCatalog(catalogTextbookId) {
+          const r = d.addTextbookFromCatalog(data(), catalog, catalogTextbookId, now());
           commit(r.data);
           return r.textbookId;
         },

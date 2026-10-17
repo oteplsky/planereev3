@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { History } from "lucide-react";
 
 /**
  * One status system for lessons across the site: history chips, material cards,
@@ -90,15 +89,6 @@ export function LessonStatusChip({ status }: { status: LessonStatus | null }) {
 export function HomeworkChip({ status }: { status: HomeworkStatusKey | null }) {
   if (!status) return null;
   return <StatusChip icon={<HomeworkRing status={status} />}>{homeworkChipLabel[status]}</StatusChip>;
-}
-
-/** A textbook can mix lesson statuses, so it only says it has been used with this learner. */
-export function UsedChip() {
-  return (
-    <StatusChip icon={<History size={14} strokeWidth={2} className="ml-0.5 text-ink-secondary" aria-hidden />}>
-      Использовался
-    </StatusChip>
-  );
 }
 
 /** Lesson + homework chips for one learner's lesson, as shown on cards. */

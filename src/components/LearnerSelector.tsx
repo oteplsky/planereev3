@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, LibraryBig, Search } from "lucide-react";
+import { ChevronDown, LibraryBig, Plus, Search } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { contextHref } from "@/lib/context";
+import { crm } from "@/lib/crm";
 import { learnerTypeLabel, shortName } from "@/lib/learners";
 import { useStore } from "@/lib/store";
 import type { Learner } from "@/lib/types";
@@ -18,7 +19,7 @@ interface LearnerSelectorProps {
 }
 
 /**
- * Primary context switch (spec §4.1): «Библиотека» first, then learners and groups.
+ * Primary context switch (spec §4.1): «Библиотека» first, then learners and groups, then «Добавить».
  * Shows as many as fit; the rest go into «Ещё N».
  */
 export function LearnerSelector({ activeLearnerId }: LearnerSelectorProps) {
@@ -31,7 +32,7 @@ export function LearnerSelector({ activeLearnerId }: LearnerSelectorProps) {
     if (!el) return;
     const measure = () => {
       const slots = Math.floor((el.clientWidth + GAP) / (ITEM_WIDTH + GAP));
-      setCapacity(Math.max(1, slots - 1)); // one slot is «Библиотека»
+      setCapacity(Math.max(1, slots - 2)); // «Библиотека» and «Добавить» take a slot each
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -73,6 +74,19 @@ export function LearnerSelector({ activeLearnerId }: LearnerSelectorProps) {
             icon={<Avatar learner={learner} size="xl" />}
           />
         ))}
+        {/* Adding a student happens in the CRM for now; the flow will move here later. */}
+        <SelectorItem
+          href={crm.students}
+          external
+          label="Добавить"
+          title="Добавить ученика"
+          selected={false}
+          icon={
+            <span className="grid size-14 place-items-center rounded-full border border-dashed border-line-strong text-ink-secondary transition-colors duration-[120ms] group-hover:border-action group-hover:bg-selected group-hover:text-action">
+              <Plus size={24} strokeWidth={1.75} />
+            </span>
+          }
+        />
       </div>
       {hidden.length > 0 && <MoreLearners learners={hidden} />}
     </nav>
@@ -85,11 +99,14 @@ interface SelectorItemProps {
   title?: string;
   selected: boolean;
   icon: React.ReactNode;
+  /** A page outside the LMS (the CRM), opened as a regular page load. */
+  external?: boolean;
 }
 
-function SelectorItem({ href, label, title, selected, icon }: SelectorItemProps) {
+function SelectorItem({ href, label, title, selected, icon, external }: SelectorItemProps) {
+  const Anchor = external ? "a" : Link;
   return (
-    <Link
+    <Anchor
       href={href}
       title={title}
       aria-current={selected ? "page" : undefined}
@@ -110,7 +127,7 @@ function SelectorItem({ href, label, title, selected, icon }: SelectorItemProps)
       >
         {label}
       </span>
-    </Link>
+    </Anchor>
   );
 }
 

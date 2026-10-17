@@ -7,6 +7,8 @@ export interface MenuItem {
   icon?: ReactNode;
   onSelect: () => void;
   danger?: boolean;
+  /** Starts a new group: a divider is drawn above the item. */
+  divider?: boolean;
 }
 
 interface MenuProps {
@@ -20,10 +22,12 @@ interface MenuProps {
   }) => ReactNode;
   items: MenuItem[];
   align?: "left" | "right";
+  /** Non-interactive content above the items, e.g. whose account this is. */
+  header?: ReactNode;
 }
 
 /** UI kit · Оверлеи: dropdown menu. Arrow keys move, Escape closes and returns focus. */
-export function Menu({ trigger, items, align = "right" }: MenuProps) {
+export function Menu({ trigger, items, align = "right", header }: MenuProps) {
   const [open, setOpen] = useState(false);
   const id = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -75,7 +79,9 @@ export function Menu({ trigger, items, align = "right" }: MenuProps) {
           onKeyDown={onKeyDown}
           className={`absolute top-full z-30 mt-1 min-w-52 rounded-md border border-line bg-surface p-1.5 shadow-2 ${align === "right" ? "right-0" : "left-0"}`}
         >
-          {items.map((item, i) => (
+          {header}
+          {items.map((item, i) => [
+            item.divider && <div key={`${item.label}-divider`} role="separator" className="-mx-1.5 my-1.5 h-px bg-line" />,
             <button
               key={item.label}
               ref={(el) => {
@@ -92,8 +98,8 @@ export function Menu({ trigger, items, align = "right" }: MenuProps) {
             >
               {item.icon}
               {item.label}
-            </button>
-          ))}
+            </button>,
+          ])}
         </div>
       )}
     </div>

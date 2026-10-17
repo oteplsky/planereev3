@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, BookX, Check, Ellipsis, FolderOutput, GripVertical, ListPlus, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, BookX, Check, Ellipsis, FolderOutput, GripVertical, ListPlus, Pencil, Plus, Trash2 } from "lucide-react";
 import { ActionsMenu, type CardActions } from "@/components/library/Cards";
 import { LibraryDialogs, requestDelete, type DialogState } from "@/components/library/LibraryDialogs";
-import { LessonStatusChips } from "@/components/ui/Badge";
+import { LessonStatusChips, StatusChip } from "@/components/ui/Badge";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Button, IconButton } from "@/components/ui/Button";
 import { ConfirmDialog, Dialog, PromptDialog } from "@/components/ui/Dialog";
@@ -22,6 +22,7 @@ import {
   lessonStatusForLearner,
   textbookLessonCount,
   textbookLessons,
+  textbookProgress,
 } from "@/lib/domain";
 import { useStore } from "@/lib/store";
 import type { Lesson, Textbook, TextbookSection } from "@/lib/types";
@@ -89,6 +90,7 @@ export function TextbookScreen() {
   const lessonsIn = (container: string | null) =>
     container === null ? loose : (sections.find((s) => s.section.id === container)?.lessons ?? []);
   const libraryHref = contextHref("/library", learnerId, { folder: textbook.folderId });
+  const progress = learnerId ? textbookProgress(data, learnerId, textbook) : null;
   const textbookTarget = { kind: "textbook" as const, id: textbook.id, title: textbook.title };
 
   // ── Reordering: drag and drop, or ↑ ↓ on a focused handle ──
@@ -222,12 +224,20 @@ export function TextbookScreen() {
               number={lessonNumber(lesson.id)}
               href={contextHref(`/lesson/${lesson.id}`, learnerId)}
               dragging={drag?.id === lesson.id}
+              highlighted={progress?.next?.id === lesson.id}
               status={
                 learnerId && (
-                  <LessonStatusChips
-                    lesson={lessonStatusForLearner(data, learnerId, lesson.id)}
-                    homework={homeworkStatusForLearner(data, learnerId, lesson.id)}
-                  />
+                  <>
+                    {progress?.next?.id === lesson.id && (
+                      <StatusChip icon={<ArrowRight size={14} strokeWidth={2.5} className="ml-0.5 text-action" aria-hidden />}>
+                        Следующий
+                      </StatusChip>
+                    )}
+                    <LessonStatusChips
+                      lesson={lessonStatusForLearner(data, learnerId, lesson.id)}
+                      homework={homeworkStatusForLearner(data, learnerId, lesson.id)}
+                    />
+                  </>
                 )
               }
               handle={
@@ -278,6 +288,7 @@ export function TextbookScreen() {
         <TextbookHeader
           textbook={textbook}
           editable={editable}
+          progress={progress}
           onMove={() => setLibDialog({ type: "move", target: textbookTarget })}
           onDelete={() => setLibDialog(requestDelete(data, textbookTarget))}
         />
@@ -455,18 +466,22 @@ interface LessonRowProps {
   lesson: Lesson;
   number: number;
   href: string;
-  dragging: boolean;
+  dragging?: boolean;
+  /** The learner's next lesson. */
+  highlighted?: boolean;
   status?: ReactNode;
   handle?: ReactNode;
   actions?: CardActions;
 }
 
 /** One lesson in the textbook's order: the whole row opens it; handle and menu stay separate controls. */
-function LessonRow({ lesson, number, href, dragging, status, handle, actions }: LessonRowProps) {
+export function LessonRow({ lesson, number, href, dragging = false, highlighted = false, status, handle, actions }: LessonRowProps) {
   return (
     <div
       data-drag-row
-      className={`group relative flex min-h-14 items-center gap-3 rounded-lg border border-line bg-surface py-2 pr-2 transition-[border-color,opacity] duration-[120ms] hover:border-line-strong ${
+      className={`group relative flex min-h-14 items-center gap-3 rounded-lg border bg-surface py-2 pr-2 transition-[border-color,opacity] duration-[120ms] ${
+        highlighted ? "border-action" : "border-line hover:border-line-strong"
+      } ${
         handle ? "pl-1" : "pl-3"
       } ${dragging ? "opacity-40" : ""}`}
     >
