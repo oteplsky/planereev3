@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { TextButton } from "@/components/ui/Button";
+import { SlidersHorizontal } from "lucide-react";
+import { Button, TextButton } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Field";
 import { filterLevelOptions, type Materials } from "@/lib/domain";
 import {
@@ -28,6 +29,33 @@ export function useMetaFilters(materials: Materials, initial: MetaFilters = noFi
     });
   return { meta, setMetaFilter, resetMeta: () => setMeta(noFilters), levelOptions };
 }
+
+/**
+ * Filters stay folded behind this button so they don't compete with the materials.
+ * The count says how many are set while the panel is closed.
+ */
+export function FiltersButton({ open, count, onClick }: { open: boolean; count: number; onClick: () => void }) {
+  return (
+    <Button
+      variant="ghost"
+      aria-expanded={open}
+      aria-label={count > 0 ? `Фильтры, выбрано ${count}` : undefined}
+      icon={<SlidersHorizontal size={18} strokeWidth={1.75} aria-hidden />}
+      onClick={onClick}
+      className={open ? "bg-light text-ink" : "text-ink-secondary hover:text-ink"}
+    >
+      Фильтры
+      {count > 0 && (
+        <span className="grid h-5 min-w-5 place-items-center rounded-full bg-action px-1.5 text-caption font-bold text-white">
+          {count}
+        </span>
+      )}
+    </Button>
+  );
+}
+
+/** How many of the metadata filters are set. */
+export const metaFilterCount = (meta: MetaFilters) => [meta.subject, meta.ageGroup, meta.level].filter(Boolean).length;
 
 interface MetaFilterBarProps {
   meta: MetaFilters;

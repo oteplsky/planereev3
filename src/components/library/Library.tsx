@@ -17,7 +17,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { toast } from "@/components/ui/Toast";
 import { AddTile, FolderCard, MaterialCard } from "./Cards";
 import { LibraryDialogs, requestDelete, type DialogState } from "./LibraryDialogs";
-import { MetaFilterBar, useMetaFilters } from "./MetaFilterBar";
+import { FiltersButton, MetaFilterBar, metaFilterCount, useMetaFilters } from "./MetaFilterBar";
 import { catalog } from "@/lib/catalog";
 import { catalogHref, contextHref } from "@/lib/context";
 import {
@@ -84,6 +84,7 @@ export function Library({ learner, folderId }: LibraryProps) {
   const [filter, setFilter] = useState<Filter>("all");
   const { meta, setMetaFilter, resetMeta, levelOptions } = useMetaFilters(data);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [dialog, setDialog] = useState<DialogState>(null);
   const params = useSearchParams();
   const variant = useVariant();
@@ -169,23 +170,30 @@ export function Library({ learner, folderId }: LibraryProps) {
             placeholder="Поиск по названию"
             className="min-w-60 flex-1"
           />
+          <FiltersButton
+            open={filtersOpen}
+            count={metaFilterCount(meta) + (sourceFilter !== null ? 1 : 0)}
+            onClick={() => setFiltersOpen((o) => !o)}
+          />
           <SegmentedControl label="Тип материала" options={filterOptions} value={filter} onChange={setFilter} />
         </div>
 
-        <MetaFilterBar meta={meta} levelOptions={levelOptions} onChange={setMetaFilter} active={metaFiltering} onReset={resetFilters}>
-          {/* Only once the library has materials by someone else: with one source there is nothing to pick. */}
-          {authors.length > 0 && (
-            <Select
-              aria-label="Источник"
-              placeholder="Источник"
-              value={sourceFilter}
-              options={[{ value: "mine", label: "Мои материалы" }, ...authors.map((a) => ({ value: a.id, label: a.name }))]}
-              onChange={setSourceFilter}
-              highlighted={sourceFilter !== null}
-              className="w-full sm:w-48"
-            />
-          )}
-        </MetaFilterBar>
+        {filtersOpen && (
+          <MetaFilterBar meta={meta} levelOptions={levelOptions} onChange={setMetaFilter} active={metaFiltering} onReset={resetFilters}>
+            {/* Only once the library has materials by someone else: with one source there is nothing to pick. */}
+            {authors.length > 0 && (
+              <Select
+                aria-label="Источник"
+                placeholder="Источник"
+                value={sourceFilter}
+                options={[{ value: "mine", label: "Мои материалы" }, ...authors.map((a) => ({ value: a.id, label: a.name }))]}
+                onChange={setSourceFilter}
+                highlighted={sourceFilter !== null}
+                className="w-full sm:w-48"
+              />
+            )}
+          </MetaFilterBar>
+        )}
       </div>
 
       {nothingFound && source === "own" ? (

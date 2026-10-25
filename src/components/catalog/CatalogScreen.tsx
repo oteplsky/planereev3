@@ -6,7 +6,7 @@ import { SearchX } from "lucide-react";
 import { InLibraryChip } from "@/components/catalog/AddToLibrary";
 import { MaterialCard } from "@/components/library/Cards";
 import { SectionLabel } from "@/components/library/Library";
-import { MetaFilterBar, useMetaFilters } from "@/components/library/MetaFilterBar";
+import { FiltersButton, MetaFilterBar, metaFilterCount, useMetaFilters } from "@/components/library/MetaFilterBar";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -48,6 +48,8 @@ export function CatalogScreen() {
   const { meta, setMetaFilter, resetMeta, levelOptions } = useMetaFilters(catalog, filtersFromParams(params));
 
   const metaFiltering = hasActiveFilters(meta);
+  // Filters handed over from a library search open with the panel, so the teacher sees why.
+  const [filtersOpen, setFiltersOpen] = useState(metaFiltering);
   const textbooks = searchMaterials(catalog, query, meta).textbooks;
   const fromId = from?.id ?? null;
   if (variant === "b") return null;
@@ -57,8 +59,13 @@ export function CatalogScreen() {
       <div className="flex flex-col gap-4">
         {from && <Breadcrumbs items={[{ label: from.name, href: contextHref("/library", from.id) }]} current="Каталог" />}
         <h1 className="sr-only">Каталог</h1>
-        <SearchField value={query} onChange={setQuery} placeholder="Поиск по названию" />
-        <MetaFilterBar meta={meta} levelOptions={levelOptions} onChange={setMetaFilter} active={metaFiltering} onReset={resetMeta} />
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchField value={query} onChange={setQuery} placeholder="Поиск по названию" className="min-w-60 flex-1" />
+          <FiltersButton open={filtersOpen} count={metaFilterCount(meta)} onClick={() => setFiltersOpen((o) => !o)} />
+        </div>
+        {filtersOpen && (
+          <MetaFilterBar meta={meta} levelOptions={levelOptions} onChange={setMetaFilter} active={metaFiltering} onReset={resetMeta} />
+        )}
       </div>
 
       {textbooks.length === 0 ? (
