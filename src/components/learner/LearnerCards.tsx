@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { Check, ChevronDown, Play, RotateCcw } from "lucide-react";
-import { HomeworkChip, HomeworkRing, homeworkChipLabel, lessonStatus, LessonStatusIcon } from "@/components/ui/Badge";
+import { HomeworkChip, homeworkChipLabel } from "@/components/ui/Badge";
 import { buttonClass, textButtonClass } from "@/components/ui/Button";
 import { Menu } from "@/components/ui/Menu";
 import { toast } from "@/components/ui/Toast";
 import { contextHref } from "@/lib/context";
-import { lessonOfLearnerLesson, type HistoryEntry } from "@/lib/domain";
+import { lessonOfLearnerLesson } from "@/lib/domain";
 import { formatDate } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { HomeworkAssignment, HomeworkStatus, LessonSession } from "@/lib/types";
@@ -101,25 +101,5 @@ export function HomeworkStatusMenu({ homework }: { homework: HomeworkAssignment 
         </button>
       )}
     />
-  );
-}
-
-/** One lesson in the learner's history: lesson status before the title, homework after it. */
-export function HistoryChip({ entry, learnerId }: { entry: HistoryEntry; learnerId: string }) {
-  const labels = [
-    entry.status && lessonStatus[entry.status].label,
-    entry.homework && homeworkChipLabel[entry.homework],
-  ].filter(Boolean);
-  return (
-    <Link
-      href={contextHref(`/lesson/${entry.lesson.id}`, learnerId)}
-      title={[entry.lesson.title, ...labels].join(" · ")}
-      className="inline-flex h-10 max-w-full items-center gap-2 rounded-full border border-line bg-surface px-4 font-semibold text-ink transition-colors duration-[120ms] hover:border-line-strong hover:bg-hover has-[svg:first-child]:pl-3 has-[svg:last-child]:pr-3"
-    >
-      {entry.status && <LessonStatusIcon status={entry.status} />}
-      <span className="truncate">{entry.lesson.title}</span>
-      {labels.length > 0 && <span className="sr-only">{labels.join(", ")}</span>}
-      {entry.homework && <HomeworkRing status={entry.homework} />}
-    </Link>
   );
 }

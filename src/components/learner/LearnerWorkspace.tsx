@@ -1,25 +1,26 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
-import { Dialog } from "@/components/ui/Dialog";
+import { useState } from "react";
 import Link from "next/link";
-import { homeworkStatus, LessonStatusChips } from "@/components/ui/Badge";
+import { History } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { Dialog } from "@/components/ui/Dialog";
+import { homeworkChipLabel, homeworkStatus, lessonStatus } from "@/components/ui/Badge";
 import { FilterChips } from "@/components/ui/FilterChips";
 import { contextHref } from "@/lib/context";
 import { getCurrentSession, getLessonHistory, learnerTextbooks, type HistoryEntry } from "@/lib/domain";
 import { formatDate } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { HomeworkStatus, Learner } from "@/lib/types";
-import { CurrentLesson, HistoryChip } from "./LearnerCards";
+import { CurrentLesson } from "./LearnerCards";
 import { NextLesson } from "./NextLesson";
 
-/** At most this many recent lessons, and only as many as fit on one row; the rest is in the modal. */
-const RECENT = 5;
-const GAP = 8;
+/** Homework in this status waits for the teacher, so it is the one thing the history button counts. */
+const NEEDS_ATTENTION: HomeworkStatus = "completed";
 
 /**
  * Learner layer above the shared library (spec §7.1): the current lesson — or, when none is in progress,
- * the next one — then lesson history with homework marks.
+ * the next one. Lesson history stays one quiet click away, counting only homework that waits for the teacher.
  */
 export function LearnerWorkspace({ learner }: { learner: Learner }) {
   const data = useStore((s) => s.data);
@@ -27,108 +28,50 @@ export function LearnerWorkspace({ learner }: { learner: Learner }) {
   const current = getCurrentSession(data, learner.id);
   const history = getLessonHistory(data, learner.id);
   const upNext = learnerTextbooks(data, learner.id).find((p) => p.next);
+  const waiting = history.filter((h) => h.homework === NEEDS_ATTENTION).length;
 
   return (
-    <div className="flex flex-col gap-10">
-      {!current && upNext?.next ? (
-        <NextLesson learner={learner} progress={upNext} lesson={upNext.next} />
-      ) : (
-        <CurrentLesson session={current} />
-      )}
+    <div className="flex flex-col items-start gap-2">
+      <div className="w-full">
+        {!current && upNext?.next ? (
+          <NextLesson learner={learner} progress={upNext} lesson={upNext.next} />
+        ) : (
+          <CurrentLesson session={current} />
+        )}
+      </div>
 
       {history.length > 0 && (
-        <section aria-labelledby="history-heading">
-          <h2 id="history-heading" className="mb-4 text-h2">
+        <>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<History size={16} strokeWidth={1.75} aria-hidden />}
+            aria-label={waiting > 0 ? `История уроков, ${waiting} ${homeworkWord(waiting)} ждут проверки` : undefined}
+            onClick={() => setShowAll(true)}
+            className="text-ink-secondary hover:text-ink"
+          >
             История уроков
-          </h2>
-          <RecentRow history={history} learnerId={learner.id} onMore={() => setShowAll(true)} />
+            {waiting > 0 && (
+              <span className="grid h-5 min-w-5 place-items-center rounded-full bg-ink px-1.5 text-caption font-bold text-surface">
+                {waiting}
+              </span>
+            )}
+          </Button>
           <Dialog open={showAll} onClose={() => setShowAll(false)} title="История уроков" wide>
             <FullHistory history={history} learnerId={learner.id} />
           </Dialog>
-        </section>
+        </>
       )}
     </div>
   );
 }
 
-/**
- * One row of the latest lessons. Chips are measured off-screen so the row shows
- * as many as fit next to «Ещё N» — 5 on a wide screen, fewer on a narrow one.
- */
-function RecentRow({ history, learnerId, onMore }: { history: HistoryEntry[]; learnerId: string; onMore: () => void }) {
-  const rowRef = useRef<HTMLDivElement>(null);
-  const measureRef = useRef<HTMLUListElement>(null);
-  const candidates = history.slice(0, RECENT);
-  const [fit, setFit] = useState(candidates.length);
-  const candidateKey = candidates.map((e) => e.learnerLesson.id).join();
-
-  useLayoutEffect(() => {
-    const row = rowRef.current;
-    const measure = measureRef.current;
-    if (!row || !measure) return;
-    const update = () => {
-      const items = [...measure.children] as HTMLElement[];
-      const chipWidths = items.slice(0, -1).map((el) => el.offsetWidth);
-      const moreWidth = items.at(-1)!.offsetWidth;
-      let used = 0;
-      let count = 0;
-      for (const [i, width] of chipWidths.entries()) {
-        const needsMore = i + 1 < history.length;
-        const next = used + (count ? GAP : 0) + width;
-        if (next + (needsMore ? GAP + moreWidth : 0) > row.clientWidth) break;
-        used = next;
-        count++;
-      }
-      setFit(Math.max(1, count));
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(row);
-    return () => observer.disconnect();
-  }, [history.length, candidateKey]);
-
-  const hidden = history.length - fit;
-  const more = (label: string) => (
-    <button
-      type="button"
-      onClick={onMore}
-      className="flex h-10 shrink-0 items-center rounded-full bg-light px-4 font-semibold whitespace-nowrap transition-colors duration-[120ms] hover:bg-light-hover active:bg-light-pressed"
-    >
-      {label}
-    </button>
-  );
-
-  return (
-    <div ref={rowRef} className="relative">
-      {/* Off-screen copy for measuring natural chip widths. */}
-      <div aria-hidden inert className="pointer-events-none invisible absolute size-0 overflow-hidden">
-        <ul ref={measureRef} className="flex w-max gap-2 whitespace-nowrap">
-          {candidates.map((entry) => (
-            <li key={entry.learnerLesson.id}>
-              <HistoryChip entry={entry} learnerId={learnerId} />
-            </li>
-          ))}
-          <li>{more(`Ещё ${history.length}`)}</li>
-        </ul>
-      </div>
-      <ChipList entries={history.slice(0, fit)} learnerId={learnerId}>
-        {hidden > 0 && <li className="shrink-0">{more(`Ещё ${hidden}`)}</li>}
-      </ChipList>
-    </div>
-  );
-}
-
-function ChipList({ entries, learnerId, children }: { entries: HistoryEntry[]; learnerId: string; children?: React.ReactNode }) {
-  return (
-    <ul className="flex gap-2">
-      {entries.map((entry) => (
-        <li key={entry.learnerLesson.id} className="max-w-full min-w-0">
-          <HistoryChip entry={entry} learnerId={learnerId} />
-        </li>
-      ))}
-      {children}
-    </ul>
-  );
+function homeworkWord(n: number) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "домашка";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "домашки";
+  return "домашек";
 }
 
 type HistoryFilter = "all" | HomeworkStatus;
@@ -164,12 +107,15 @@ function FullHistory({ history, learnerId }: { history: HistoryEntry[]; learnerI
   );
 }
 
-/** A line in the full history: title, where it's from and when, then the lesson and homework chips. */
+/**
+ * A line in the full history: title, where it's from and when, then statuses as plain text.
+ * No colour — only homework waiting for the teacher is set in ink to stand out.
+ */
 function HistoryRow({ entry, learnerId }: { entry: HistoryEntry; learnerId: string }) {
   return (
     <Link
       href={contextHref(`/lesson/${entry.lesson.id}`, learnerId)}
-      className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md px-2 py-3 transition-colors duration-[120ms] hover:bg-hover"
+      className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md px-2 py-3 transition-colors duration-[120ms] hover:bg-hover"
     >
       <div className="min-w-0 flex-1">
         <p className="truncate font-bold">{entry.lesson.title}</p>
@@ -177,7 +123,15 @@ function HistoryRow({ entry, learnerId }: { entry: HistoryEntry; learnerId: stri
           {[entry.textbook?.title, formatDate(entry.lastActivityAt)].filter(Boolean).join(" · ")}
         </p>
       </div>
-      <LessonStatusChips lesson={entry.status} homework={entry.homework} />
+      <p className="text-caption text-ink-secondary">
+        {entry.status && lessonStatus[entry.status].label}
+        {entry.status && entry.homework && " · "}
+        {entry.homework && (
+          <span className={entry.homework === NEEDS_ATTENTION ? "font-semibold text-ink" : undefined}>
+            {homeworkChipLabel[entry.homework]}
+          </span>
+        )}
+      </p>
     </Link>
   );
 }
