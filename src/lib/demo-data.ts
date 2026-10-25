@@ -669,3 +669,17 @@ export function createDemoData(): AppData {
     homework: [...homeworkAssignments, ...longHistories.flatMap((h) => h.homework)],
   });
 }
+
+/** A teacher who has just joined: no students, groups or materials of their own yet. */
+export function createEmptyData(): AppData {
+  return {
+    teacher: { id: "teacher", name: "Мария Иванова" },
+    learners: [],
+    folders: [],
+    textbooks: [],
+    lessons: [],
+    learnerLessons: [],
+    sessions: [],
+    homework: [],
+  };
+}

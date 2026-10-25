@@ -1,7 +1,7 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { SearchX } from "lucide-react";
 import { InLibraryChip } from "@/components/catalog/AddToLibrary";
 import { MaterialCard } from "@/components/library/Cards";
@@ -15,7 +15,7 @@ import { catalog } from "@/lib/catalog";
 import { catalogHref, contextHref, useReturnLearner } from "@/lib/context";
 import { searchMaterials, textbookFromCatalog, textbookLessonCount } from "@/lib/domain";
 import { AGE_GROUPS, hasActiveFilters, levelLabels, SUBJECTS, type Level, type MetaFilters } from "@/lib/meta";
-import { useStore } from "@/lib/store";
+import { useStore, useVariant } from "@/lib/store";
 
 /** Filters handed over from a library search (`?q=…&subject=…`); unknown values are ignored. */
 function filtersFromParams(params: URLSearchParams): MetaFilters {
@@ -37,6 +37,12 @@ function filtersFromParams(params: URLSearchParams): MetaFilters {
 export function CatalogScreen() {
   const params = useSearchParams();
   const from = useReturnLearner();
+  const router = useRouter();
+  const variant = useVariant();
+  // Version B has no catalog page: it is the «Каталог» half of the library's materials.
+  useEffect(() => {
+    if (variant === "b") router.replace(contextHref("/library", from?.id ?? null, { materials: "catalog" }));
+  }, [variant, from, router]);
   const data = useStore((s) => s.data);
   const [query, setQuery] = useState(params.get("q") ?? "");
   const { meta, setMetaFilter, resetMeta, levelOptions } = useMetaFilters(catalog, filtersFromParams(params));
@@ -44,6 +50,7 @@ export function CatalogScreen() {
   const metaFiltering = hasActiveFilters(meta);
   const textbooks = searchMaterials(catalog, query, meta).textbooks;
   const fromId = from?.id ?? null;
+  if (variant === "b") return null;
 
   return (
     <div className="flex flex-col gap-8">

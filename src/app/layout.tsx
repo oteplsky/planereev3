@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Montserrat_Alternates } from "next/font/google";
 import { AppHeader } from "@/components/AppHeader";
+import { PrototypeBadge } from "@/components/PrototypeLauncher";
 import { StoreHydrator } from "@/components/StoreGate";
+import { Suspense } from "react";
 import { Toaster } from "@/components/ui/Toast";
 import "./globals.css";
 
@@ -24,6 +26,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <AppHeader />
         <main className="mx-auto w-full max-w-[1264px] flex-1 px-8 pt-8 pb-16">{children}</main>
         <Toaster />
+        <Suspense>
+          <PrototypeBadge />
+        </Suspense>
       </body>
     </html>
   );

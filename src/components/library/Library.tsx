@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { ArrowRight, BookOpen, FileText, FolderOpen, FolderOutput, SearchX } from "lucide-react";
+import { InLibraryChip } from "@/components/catalog/AddToLibrary";
 import { LessonStatusChips } from "@/components/ui/Badge";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Button, textButtonClass } from "@/components/ui/Button";
@@ -35,7 +36,7 @@ import {
 } from "@/lib/domain";
 import { hasActiveFilters, type MetaFilters } from "@/lib/meta";
 import { count, MATERIALS, TEXTBOOKS } from "@/lib/format";
-import { useStore } from "@/lib/store";
+import { useStore, useVariant } from "@/lib/store";
 import type { Learner } from "@/lib/types";
 
 type Filter = "all" | "textbooks" | "lessons";
@@ -49,6 +50,13 @@ const kindOption = {
   textbook: { label: "Учебник", icon: BookOpen },
   lesson: { label: "Урок", icon: FileText },
 };
+
+/** Version B: the catalog moved from the top nav into the materials, next to the teacher's own. */
+type Source = "own" | "catalog";
+const sourceOptions: { value: Source; label: string }[] = [
+  { value: "own", label: "Своё" },
+  { value: "catalog", label: "Каталог" },
+];
 
 const filterOptions: { value: Filter; label: string }[] = [
   { value: "all", label: "Все" },
@@ -77,12 +85,25 @@ export function Library({ learner, folderId }: LibraryProps) {
   const { meta, setMetaFilter, resetMeta, levelOptions } = useMetaFilters(data);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(null);
   const [dialog, setDialog] = useState<DialogState>(null);
+  const params = useSearchParams();
+  const variant = useVariant();
 
   const editable = learner === null;
   const learnerId = learner?.id ?? null;
   // A deleted or unknown folder falls back to the root.
   const folder = data.folders.find((f) => f.id === folderId) ?? null;
   const path = folderPath(data, folder?.id ?? null);
+
+  // At the root only: a folder holds the teacher's own materials.
+  const sourceSwitch = variant === "b" && !folder;
+  const source: Source = sourceSwitch && params.get("materials") === "catalog" ? "catalog" : "own";
+  const setSource = (next: Source) =>
+    router.replace(contextHref("/library", learnerId, { materials: next === "catalog" ? next : null }), { scroll: false });
+  const sourceControl = sourceSwitch && (
+    <div className="mb-4 flex">
+      <SegmentedControl label="Материалы" options={sourceOptions} value={source} onChange={setSource} />
+    </div>
+  );
 
   const location = libraryLocation(data, folder?.id ?? null);
   const authors = libraryAuthors(data);
@@ -167,23 +188,26 @@ export function Library({ learner, folderId }: LibraryProps) {
         </MetaFilterBar>
       </div>
 
-      {nothingFound ? (
-        <EmptyState
-          icon={<SearchX size={28} strokeWidth={1.5} aria-hidden />}
-          title="Ничего не нашли"
-          description="Попробуйте другое название или сбросьте фильтр."
-          action={
-            <Button
-              onClick={() => {
-                setQuery("");
-                setFilter("all");
-                resetFilters();
-              }}
-            >
-              Сбросить
-            </Button>
-          }
-        />
+      {nothingFound && source === "own" ? (
+        <div>
+          {sourceControl}
+          <EmptyState
+            icon={<SearchX size={28} strokeWidth={1.5} aria-hidden />}
+            title="Ничего не нашли"
+            description="Попробуйте другое название или сбросьте фильтр."
+            action={
+              <Button
+                onClick={() => {
+                  setQuery("");
+                  setFilter("all");
+                  resetFilters();
+                }}
+              >
+                Сбросить
+              </Button>
+            }
+          />
+        </div>
       ) : (
         <>
           {(folders.length > 0 || (editable && !isFiltering && !folder)) && (
@@ -213,9 +237,14 @@ export function Library({ learner, folderId }: LibraryProps) {
             </div>
           )}
 
-          {(textbooks.length + lessons.length > 0 || (editable && !isFiltering)) && (
+          {source === "catalog" ? (
             <div>
-              <SectionLabel label={searching ? "Результаты поиска" : "Материалы"} />
+              {sourceControl}
+              <CatalogMaterials query={query} meta={meta} filter={filter} learnerId={learnerId} />
+            </div>
+          ) : (textbooks.length + lessons.length > 0 || (editable && !isFiltering) || sourceSwitch) && (
+            <div>
+              {sourceControl || <SectionLabel label={searching ? "Результаты поиска" : "Материалы"} />}
               <div className={GRID}>
                 {editable && !isFiltering && <AddMaterial onSelect={(kind) => setDialog({ type: "create", kind })} />}
                 {textbooks.map((t) => {
@@ -281,13 +310,15 @@ export function Library({ learner, folderId }: LibraryProps) {
             </div>
           )}
 
-          {locationEmpty && !editable && (
+          {locationEmpty && !editable && source === "own" && (
             <EmptyState icon={<FolderOpen size={28} strokeWidth={1.5} aria-hidden />} title={folder ? "В папке пусто" : "Библиотека пустая"} />
           )}
         </>
       )}
 
-      {searching && sourceFilter !== "mine" && <CatalogHint query={query} meta={meta} learnerId={learnerId} />}
+      {searching && sourceFilter !== "mine" && source === "own" && (
+        <CatalogHint query={query} meta={meta} learnerId={learnerId} onOpen={sourceSwitch ? () => setSource("catalog") : undefined} />
+      )}
 
       {editable && (
         <LibraryDialogs
@@ -306,10 +337,24 @@ export function Library({ learner, folderId }: LibraryProps) {
  * While searching, Planeree's textbooks that match and aren't in the library yet: the moment a teacher
  * looks for something they don't have. Opens the catalog with the same search.
  */
-function CatalogHint({ query, meta, learnerId }: { query: string; meta: MetaFilters; learnerId: string | null }) {
+function CatalogHint({ query, meta, learnerId, onOpen }: { query: string; meta: MetaFilters; learnerId: string | null; onOpen?: () => void }) {
   const data = useStore((s) => s.data);
   const found = searchMaterials(catalog, query, meta).textbooks.filter((t) => !textbookFromCatalog(data, t.id));
   if (found.length === 0) return null;
+  const label = (
+    <>
+      В каталоге: {count(found.length, TEXTBOOKS)}
+      <ArrowRight size={18} strokeWidth={1.75} aria-hidden />
+    </>
+  );
+  // Version B: the catalog is the other half of the materials switch, with the same search.
+  if (onOpen) {
+    return (
+      <button type="button" onClick={onOpen} className={`${textButtonClass} -mt-2 self-start`}>
+        {label}
+      </button>
+    );
+  }
   const href = catalogHref("/catalog", learnerId, {
     q: query.trim(),
     subject: meta.subject,
@@ -318,9 +363,35 @@ function CatalogHint({ query, meta, learnerId }: { query: string; meta: MetaFilt
   });
   return (
     <Link href={href} className={`${textButtonClass} -mt-2`}>
-      В каталоге: {count(found.length, TEXTBOOKS)}
-      <ArrowRight size={18} strokeWidth={1.75} aria-hidden />
+      {label}
     </Link>
+  );
+}
+
+/** Version B, «Каталог»: Planeree's textbooks under the library's own search and filters. */
+function CatalogMaterials({ query, meta, filter, learnerId }: { query: string; meta: MetaFilters; filter: Filter; learnerId: string | null }) {
+  const data = useStore((s) => s.data);
+  // The catalog has textbooks only.
+  const textbooks = filter === "lessons" ? [] : searchMaterials(catalog, query, meta).textbooks;
+  if (textbooks.length === 0) {
+    return <EmptyState icon={<SearchX size={28} strokeWidth={1.5} aria-hidden />} title="Ничего не нашли" />;
+  }
+  return (
+    <div className={GRID}>
+      {textbooks.map((t) => (
+        <MaterialCard
+          key={t.id}
+          href={catalogHref(`/catalog/${t.id}`, learnerId)}
+          kind="textbook"
+          title={t.title}
+          caption={t.author?.name}
+          lessonCount={textbookLessonCount(t)}
+          cover={t.cover}
+          coverImage={t.coverImage}
+          badge={textbookFromCatalog(data, t.id) && <InLibraryChip />}
+        />
+      ))}
+    </div>
   );
 }
 

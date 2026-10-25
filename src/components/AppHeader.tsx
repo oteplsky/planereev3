@@ -7,7 +7,7 @@ import { ChevronDown } from "lucide-react";
 import { Menu, type MenuItem } from "@/components/ui/Menu";
 import { catalogHref } from "@/lib/context";
 import { crm } from "@/lib/crm";
-import { useStore } from "@/lib/store";
+import { useStore, useVariant } from "@/lib/store";
 
 const go = (href: string) => () => window.location.assign(href);
 
@@ -78,6 +78,8 @@ function ContextNavLinks() {
 
 /** `inCatalog` is null while the URL is unknown (prerender): no section is marked current. */
 function NavLinks({ learnerId, inCatalog }: { learnerId: string | null; inCatalog: boolean | null }) {
+  // Version B: the catalog is a switch inside the library's materials.
+  const withCatalog = useVariant() === "a";
   return (
     <>
       <NavLink href={crm.schedule} current={false} external>
@@ -86,12 +88,14 @@ function NavLinks({ learnerId, inCatalog }: { learnerId: string | null; inCatalo
       <NavLink href={crm.students} current={false} external>
         Ученики
       </NavLink>
-      <NavLink href="/library" current={inCatalog === false}>
+      <NavLink href="/library" current={withCatalog ? inCatalog === false : inCatalog !== null}>
         Библиотека
       </NavLink>
-      <NavLink href={catalogHref("/catalog", learnerId)} current={inCatalog === true}>
-        Каталог
-      </NavLink>
+      {withCatalog && (
+        <NavLink href={catalogHref("/catalog", learnerId)} current={inCatalog === true}>
+          Каталог
+        </NavLink>
+      )}
     </>
   );
 }

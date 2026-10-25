@@ -6,7 +6,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import * as d from "./domain";
 import { catalog } from "./catalog";
-import { createDemoData } from "./demo-data";
+import { createDemoData, createEmptyData } from "./demo-data";
 import type {
   AccentColor,
   AppData,
@@ -22,12 +22,30 @@ const STORAGE_VERSION = 6;
 
 const now = () => new Date().toISOString();
 
+/**
+ * Prototype launcher (/prototype): which design version is shown and which data it starts from.
+ * A — «Библиотека» and «+» are separate items; B — «Библиотека» carries the «+» and the catalog
+ * lives in the materials switch instead of the top nav.
+ */
+export type Variant = "a" | "b";
+export type Scenario = "demo" | "empty";
+export interface PrototypeSettings {
+  variant: Variant;
+  scenario: Scenario;
+}
+
+const seed = (scenario: Scenario) => (scenario === "empty" ? createEmptyData() : createDemoData());
+
 type Kind = "lesson" | "textbook";
 type Outcome = { ok: true } | { ok: false; reason: BlockReason };
 
 interface Store {
   data: AppData;
   hydrated: boolean;
+  prototype: PrototypeSettings;
+
+  /** Opens a version with its starting data; data edited so far is replaced. */
+  startPrototype(settings: PrototypeSettings): void;
 
   // Folders
   createFolder(name: string, parentFolderId: string | null): string;
@@ -99,6 +117,9 @@ export const useStore = create<Store>()(
       return {
         data: createDemoData(),
         hydrated: false,
+        prototype: { variant: "a", scenario: "demo" },
+
+        startPrototype: (settings) => set({ prototype: settings, data: seed(settings.scenario) }),
 
         createFolder(name, parentFolderId) {
           const r = d.createFolder(data(), name, parentFolderId);
@@ -176,20 +197,24 @@ export const useStore = create<Store>()(
         setHomeworkStatus: (id, status) =>
           commit(d.setHomeworkStatus(data(), id, status, now())),
 
-        resetDemoData: () => commit(createDemoData()),
+        resetDemoData: () => commit(seed(get().prototype.scenario)),
       };
     },
     {
       name: STORAGE_KEY,
       version: STORAGE_VERSION,
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ data: state.data }),
+      partialize: (state) => ({ data: state.data, prototype: state.prototype }),
       // Prototype: incompatible stored data is replaced rather than migrated.
       migrate: () => ({ data: createDemoData() }),
       // Same shape, older values (e.g. «Дошкольники»): mapped on load instead of replaced.
       merge: (persisted, current) => {
-        const saved = (persisted as { data?: AppData } | undefined)?.data;
-        return { ...current, ...(saved ? { data: d.migrateData(saved) } : {}) };
+        const saved = persisted as { data?: AppData; prototype?: PrototypeSettings } | undefined;
+        return {
+          ...current,
+          ...(saved?.data ? { data: d.migrateData(saved.data) } : {}),
+          ...(saved?.prototype ? { prototype: saved.prototype } : {}),
+        };
       },
       // Hydrated explicitly on the client (see StoreGate) to avoid SSR mismatches.
       skipHydration: true,
@@ -197,3 +222,5 @@ export const useStore = create<Store>()(
     },
   ),
 );
+
+export const useVariant = () => useStore((s) => s.prototype.variant);
