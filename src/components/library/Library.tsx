@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { ArrowRight, BookOpen, FileText, FolderOpen, FolderOutput, SearchX } from "lucide-react";
+import { ArrowRight, BookOpen, Check, FileText, FolderOpen, FolderOutput, SearchX } from "lucide-react";
 import { InLibraryChip } from "@/components/catalog/AddToLibrary";
 import { LessonStatusChips } from "@/components/ui/Badge";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
@@ -58,11 +58,6 @@ const sourceOptions: { value: Source; label: string }[] = [
   { value: "catalog", label: "Каталог" },
 ];
 
-const filterOptions: { value: Filter; label: string }[] = [
-  { value: "all", label: "Все" },
-  { value: "textbooks", label: "Учебники" },
-  { value: "lessons", label: "Уроки" },
-];
 
 interface LibraryProps {
   /** Null = global context. In a learner context the library is read-only (spec §11.4). */
@@ -114,6 +109,7 @@ export function Library({ learner, folderId }: LibraryProps) {
   const resetFilters = () => {
     resetMeta();
     setSourceFilter(null);
+    setFilter("all");
   };
 
   // Folders live only at the root and never appear in search results.
@@ -172,14 +168,20 @@ export function Library({ learner, folderId }: LibraryProps) {
           />
           <FiltersButton
             open={filtersOpen}
-            count={metaFilterCount(meta) + (sourceFilter !== null ? 1 : 0)}
+            count={metaFilterCount(meta) + (sourceFilter !== null ? 1 : 0) + (filter !== "all" ? 1 : 0)}
             onClick={() => setFiltersOpen((o) => !o)}
           />
-          <SegmentedControl label="Тип материала" options={filterOptions} value={filter} onChange={setFilter} />
         </div>
 
         {filtersOpen && (
-          <MetaFilterBar meta={meta} levelOptions={levelOptions} onChange={setMetaFilter} active={metaFiltering} onReset={resetFilters}>
+          <MetaFilterBar
+            meta={meta}
+            levelOptions={levelOptions}
+            onChange={setMetaFilter}
+            active={metaFiltering || filter !== "all"}
+            onReset={resetFilters}
+            leading={<TypeFilter value={filter} onChange={setFilter} />}
+          >
             {/* Only once the library has materials by someone else: with one source there is nothing to pick. */}
             {authors.length > 0 && (
               <Select
@@ -207,7 +209,6 @@ export function Library({ learner, folderId }: LibraryProps) {
               <Button
                 onClick={() => {
                   setQuery("");
-                  setFilter("all");
                   resetFilters();
                 }}
               >
@@ -417,6 +418,51 @@ function AddMaterial({ onSelect }: { onSelect: (kind: "textbook" | "lesson") => 
       })}
       trigger={(props) => <AddTile {...props} label="Добавить материал" className={tileClass} />}
     />
+  );
+}
+
+/**
+ * Material type as two checkboxes, both on by default. The last one left on can't be turned off:
+ * an empty choice would hide everything.
+ */
+function TypeFilter({ value, onChange }: { value: Filter; onChange: (value: Filter) => void }) {
+  const kinds = [
+    { key: "textbooks", label: "Учебники", on: value !== "lessons" },
+    { key: "lessons", label: "Уроки", on: value !== "textbooks" },
+  ] as const;
+  const toggle = (key: "textbooks" | "lessons", on: boolean) => {
+    const other = key === "textbooks" ? "lessons" : "textbooks";
+    onChange(on ? "all" : other);
+  };
+  return (
+    <div role="group" aria-label="Тип материала" className="flex h-10 items-center gap-1">
+      {kinds.map((k) => {
+        const locked = k.on && kinds.every((o) => o.key === k.key || !o.on);
+        return (
+          <label
+            key={k.key}
+            className={`flex h-10 items-center gap-2 rounded-sm px-2 font-medium transition-colors duration-[120ms] ${locked ? "cursor-default" : "cursor-pointer hover:bg-hover"}`}
+          >
+            <input
+              type="checkbox"
+              checked={k.on}
+              disabled={locked}
+              onChange={(e) => toggle(k.key, e.target.checked)}
+              className="peer sr-only"
+            />
+            <span
+              aria-hidden
+              className={`grid size-5 shrink-0 place-items-center rounded-xs border-2 transition-colors duration-[120ms] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus ${
+                k.on ? "border-action bg-action text-white" : "border-line-strong bg-surface"
+              } ${locked ? "opacity-60" : ""}`}
+            >
+              {k.on && <Check size={14} strokeWidth={3} />}
+            </span>
+            {k.label}
+          </label>
+        );
+      })}
+    </div>
   );
 }
 

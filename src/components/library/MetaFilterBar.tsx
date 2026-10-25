@@ -64,13 +64,16 @@ interface MetaFilterBarProps {
   /** Shown with «Сбросить фильтры» when any filter is set. */
   active: boolean;
   onReset: () => void;
+  /** Filters before the metadata ones (the library's material type). */
+  leading?: ReactNode;
   /** Extra filters after the metadata ones (the library's «Источник»). */
   children?: ReactNode;
 }
 
-export function MetaFilterBar({ meta, levelOptions, onChange, active, onReset, children }: MetaFilterBarProps) {
+export function MetaFilterBar({ meta, levelOptions, onChange, active, onReset, leading, children }: MetaFilterBarProps) {
   return (
     <div className="flex flex-wrap items-center gap-3">
+      {leading}
       <Select
         aria-label="Предмет"
         placeholder="Предмет"
