@@ -28,6 +28,7 @@ import {
   libraryAuthors,
   libraryLocation,
   searchMaterials,
+  shareRules,
   sortByRecentUse,
   textbookFromCatalog,
   textbookLessonCount,
@@ -189,10 +190,21 @@ export function Library({ learner, folderId }: LibraryProps) {
     const actions = editable
       ? {
           onRename: () => setDialog({ type: "rename", target }),
-          onShare: () => setDialog({ type: "share", target }),
+          onShare: shareRules(data, kind, item.id).share ? () => setDialog({ type: "share", target }) : undefined,
           onDuplicate: () => duplicate(kind, item.id),
           onMove: () => setDialog({ type: "move", target }),
-          extra: removeFromFolder(kind, item),
+          extra: [
+            ...(kind === "lesson"
+              ? [
+                  {
+                    label: "Переместить в учебник",
+                    icon: <BookOpen size={18} strokeWidth={1.75} aria-hidden />,
+                    onSelect: () => setDialog({ type: "moveToTextbook", target: { ...target, kind } }),
+                  },
+                ]
+              : []),
+            ...removeFromFolder(kind, item),
+          ],
           onDelete: () => setDialog(requestDelete(data, target)),
         }
       : undefined;

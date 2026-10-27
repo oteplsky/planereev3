@@ -406,6 +406,52 @@ describe("shared lessons", () => {
   });
 });
 
+describe("someone else's lessons", () => {
+  const withCatalogTextbook = () => {
+    const r = d.addTextbookFromCatalog(createDemoData(), catalog, "cat_speaking_club", T1);
+    const tb = r.data.textbooks.find((t) => t.id === r.textbookId)!;
+    const lessonId = r.data.lessons.find((l) => l.textbookId === tb.id)!.id;
+    return { data: r.data, tb, lessonId };
+  };
+  const author = (data: AppData, lessonId: string) => d.materialAuthor(data, data.lessons.find((l) => l.id === lessonId)!);
+
+  it("keep their author when moved to an own textbook or out of the textbook", () => {
+    const { data, lessonId } = withCatalogTextbook();
+    const own = d.createTextbook(data, NEW_TEXTBOOK, null, T1);
+    const moved = d.moveLessonToTextbook(own.data, lessonId, own.textbookId, null, T2);
+    expect(moved.lessons.find((l) => l.id === lessonId)!.textbookId).toBe(own.textbookId);
+    expect(author(moved, lessonId)).toEqual(PLANEREE);
+    expect(author(d.removeLessonFromTextbook(data, lessonId, T2), lessonId)).toEqual(PLANEREE);
+  });
+
+  it("an own lesson moved into a catalog copy stays the teacher's", () => {
+    const { data, tb } = withCatalogTextbook();
+    const own = d.createLesson(data, "Мой урок", { folderId: null }, T1);
+    const target = tb.useSections ? tb.sections[0].id : null;
+    const next = d.moveLessonToTextbook(own.data, own.lessonId, tb.id, target, T2);
+    expect(next.lessons.find((l) => l.id === own.lessonId)!.textbookId).toBe(tb.id);
+    expect(author(next, own.lessonId)).toBeNull();
+  });
+
+  it("needs a section exactly when the textbook has sections", () => {
+    const { data, tb } = withCatalogTextbook();
+    const own = d.createLesson(data, "Мой урок", { folderId: null }, T1);
+    const wrong = tb.useSections ? null : "sec_nope";
+    expect(d.moveLessonToTextbook(own.data, own.lessonId, tb.id, wrong, T2)).toBe(own.data);
+  });
+
+  it("can't be shared; an own textbook with them only for viewing", () => {
+    const { data, tb, lessonId } = withCatalogTextbook();
+    expect(d.shareRules(data, "textbook", tb.id)).toEqual({ share: false, save: false });
+    expect(d.shareRules(data, "lesson", lessonId)).toEqual({ share: false, save: false });
+    const own = d.createTextbook(data, NEW_TEXTBOOK, null, T1);
+    expect(d.shareRules(own.data, "textbook", own.textbookId)).toEqual({ share: true, save: true });
+    const mixed = d.moveLessonToTextbook(own.data, lessonId, own.textbookId, null, T2);
+    expect(d.shareRules(mixed, "textbook", own.textbookId)).toEqual({ share: true, save: false });
+    expect(d.shareRules(mixed, "lesson", lessonId).share).toBe(false);
+  });
+});
+
 describe("lesson numbers", () => {
   it("count within each section, or straight through without sections", () => {
     let data = createDemoData();

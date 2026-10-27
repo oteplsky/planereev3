@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, Folder as FolderIcon, LibraryBig } from "lucide-react";
+import { ArrowLeft, BookOpen, Check, ChevronRight, Folder as FolderIcon, LibraryBig } from "lucide-react";
+import { useState } from "react";
 import { CreateTextbookDialog } from "@/components/textbook/CreateTextbookDialog";
 import { ConfirmDialog, Dialog, NoticeDialog, PromptDialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
@@ -23,7 +24,8 @@ export type DialogState =
   | { type: "delete"; target: Target }
   | { type: "blocked"; reason: BlockReason; title?: string; description?: string }
   | { type: "move"; target: Target & { kind: "lesson" | "textbook" } }
-  | { type: "share"; target: Target & { kind: "lesson" | "textbook" } };
+  | { type: "share"; target: Target & { kind: "lesson" | "textbook" } }
+  | { type: "moveToTextbook"; target: Target & { kind: "lesson" } };
 
 /** What deleting a material removes, and — when learners worked with it — that their copies stay. */
 function deleteDescription(data: AppData, kind: "lesson" | "textbook", id: string) {
@@ -136,6 +138,8 @@ export function LibraryDialogs({ state, onClose, folderId, onDeleted, onTextbook
 
       <MoveDialog state={state} onClose={onClose} />
 
+      <MoveToTextbookDialog state={state} onClose={onClose} />
+
       <ShareDialog open={state?.type === "share"} onClose={onClose} target={state?.type === "share" ? state.target : null} />
     </>
   );
@@ -214,5 +218,96 @@ function MoveDialog({ state, onClose }: { state: DialogState; onClose: () => voi
         })}
       </ul>
     </Dialog>
+  );
+}
+
+const optionClass =
+  "flex w-full items-center gap-2.5 rounded-sm px-2 py-2 text-left text-ink transition-colors duration-[120ms] hover:bg-hover disabled:hover:bg-transparent";
+
+/** «Переместить в учебник»: pick a textbook, then a section if it has them. The lesson goes to the end. */
+function MoveToTextbookDialog({ state, onClose }: { state: DialogState; onClose: () => void }) {
+  const open = state?.type === "moveToTextbook";
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={open ? `Переместить «${state.target.title}»` : ""}
+      footer={
+        <Button variant="ghost" onClick={onClose}>
+          Отмена
+        </Button>
+      }
+    >
+      {/* Remount per open so it starts from the list of textbooks. */}
+      {open && <TextbookPicker lessonId={state.target.id} onClose={onClose} />}
+    </Dialog>
+  );
+}
+
+function TextbookPicker({ lessonId, onClose }: { lessonId: string; onClose: () => void }) {
+  const data = useStore((s) => s.data);
+  const moveLessonToTextbook = useStore((s) => s.moveLessonToTextbook);
+  const [picked, setPicked] = useState<string | null>(null);
+  const currentId = data.lessons.find((l) => l.id === lessonId)?.textbookId ?? null;
+  const textbooks = [...data.textbooks].sort((a, b) => a.title.localeCompare(b.title, "ru"));
+  const textbook = textbooks.find((t) => t.id === picked);
+
+  const move = (textbookId: string, sectionId: string | null, name: string) => {
+    moveLessonToTextbook(lessonId, textbookId, sectionId);
+    toast(`Урок перенесён в «${name}»`);
+    onClose();
+  };
+
+  if (textbook) {
+    const sections = [...textbook.sections].sort((a, b) => a.order - b.order);
+    return (
+      <div className="mt-2">
+        <button type="button" onClick={() => setPicked(null)} className={`${optionClass} -mx-2 font-semibold`}>
+          <ArrowLeft size={18} strokeWidth={1.75} className="text-ink-secondary" aria-hidden />
+          {textbook.title}
+        </button>
+        <ul className="-mx-2 mt-1 max-h-80 overflow-y-auto">
+          {sections.map((s) => (
+            <li key={s.id}>
+              <button type="button" onClick={() => move(textbook.id, s.id, s.title)} className={`${optionClass} pl-9 font-medium`}>
+                {s.title}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  return (
+    <ul className="-mx-2 mt-2 max-h-80 overflow-y-auto">
+      {textbooks.map((t) => {
+        const isCurrent = t.id === currentId;
+        // Sections on but none yet: there's nowhere to put the lesson.
+        const noSections = t.useSections && t.sections.length === 0;
+        return (
+          <li key={t.id}>
+            <button
+              type="button"
+              disabled={isCurrent || noSections}
+              onClick={() => (t.useSections ? setPicked(t.id) : move(t.id, null, t.title))}
+              className={`${optionClass} ${isCurrent ? "bg-selected disabled:hover:bg-selected" : ""} ${noSections ? "text-ink-secondary" : ""}`}
+            >
+              <BookOpen size={18} strokeWidth={1.75} className="text-ink-secondary" aria-hidden />
+              <span className="flex-1 font-medium">{t.title}</span>
+              {isCurrent ? (
+                <span className="flex items-center gap-1 text-caption text-action">
+                  <Check size={14} strokeWidth={2} aria-hidden /> Сейчас здесь
+                </span>
+              ) : noSections ? (
+                <span className="text-caption">Нет разделов</span>
+              ) : (
+                t.useSections && <ChevronRight size={18} strokeWidth={1.75} className="text-ink-secondary" aria-hidden />
+              )}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

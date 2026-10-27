@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, BookX, Check, Ellipsis, FolderOutput, GripVertical, ListPlus, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, BookOpen, BookX, Check, Ellipsis, FolderOutput, GripVertical, ListPlus, Pencil, Plus, Trash2 } from "lucide-react";
 import { ActionsMenu, type CardActions } from "@/components/library/Cards";
 import { LibraryDialogs, requestDelete, type DialogState } from "@/components/library/LibraryDialogs";
 import { LessonStatusText } from "@/components/ui/Badge";
@@ -22,6 +22,7 @@ import {
   lessonNumbers,
   lessonStatusForLearner,
   lessonTitleFor,
+  shareRules,
   textbookLessonCount,
   textbookLessons,
   textbookProgress,
@@ -161,7 +162,7 @@ export function TextbookScreen() {
     const target = { kind: "lesson" as const, id: lesson.id, title: lesson.title };
     return {
       onRename: () => setLibDialog({ type: "rename", target }),
-      onShare: () => setLibDialog({ type: "share", target }),
+      onShare: shareRules(data, "lesson", lesson.id).share ? () => setLibDialog({ type: "share", target }) : undefined,
       onDuplicate: () => {
         store.duplicateMaterial("lesson", lesson.id);
         toast("Копия урока создана");
@@ -172,6 +173,11 @@ export function TextbookScreen() {
           : undefined,
       moveLabel: "Переместить в раздел",
       extra: [
+        {
+          label: "Переместить в учебник",
+          icon: <BookOpen {...iconProps} />,
+          onSelect: () => setLibDialog({ type: "moveToTextbook", target: { ...target, kind: "lesson" } }),
+        },
         {
           label: "Убрать из учебника",
           icon: <FolderOutput {...iconProps} />,
@@ -270,7 +276,7 @@ export function TextbookScreen() {
           textbook={textbook}
           editable={editable}
           progress={progress}
-          onShare={() => setLibDialog({ type: "share", target: textbookTarget })}
+          onShare={shareRules(data, "textbook", textbook.id).share ? () => setLibDialog({ type: "share", target: textbookTarget }) : undefined}
           onMove={() => setLibDialog({ type: "move", target: textbookTarget })}
           onDelete={() => setLibDialog(requestDelete(data, textbookTarget))}
         />

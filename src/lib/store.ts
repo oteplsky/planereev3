@@ -78,6 +78,7 @@ interface Store {
     index?: number,
   ): void;
   removeLessonFromTextbook(lessonId: string): void;
+  moveLessonToTextbook(lessonId: string, textbookId: string, sectionId: string | null): void;
 
   // Lesson content
   updateGlobalLessonContent(lessonId: string, content: MockLessonContent, title?: string): void;
@@ -179,6 +180,8 @@ export const useStore = create<Store>()(
         deleteSection: (tbId, sId) => apply(d.deleteSection(data(), tbId, sId, now())),
         moveLessonInTextbook: (tbId, lessonId, toSectionId, index) =>
           commit(d.moveLessonInTextbook(data(), tbId, lessonId, toSectionId, now(), index)),
+        moveLessonToTextbook: (lessonId, tbId, sectionId) =>
+          commit(d.moveLessonToTextbook(data(), lessonId, tbId, sectionId, now())),
         removeLessonFromTextbook: (lessonId) =>
           commit(d.removeLessonFromTextbook(data(), lessonId, now())),
 

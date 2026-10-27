@@ -107,7 +107,10 @@ export interface Lesson {
   cover: AccentColor | null;
   /** Standalone lessons: place in its library location; see `libraryLocation`. */
   position?: number;
-  /** Standalone lessons saved from someone else's link: who made them. Textbook lessons take their textbook's. */
+  /**
+   * Who made the lesson, once it has left the textbook it came with (moved, saved from a link); null = the teacher.
+   * Unset = the textbook's author. Edits never change it.
+   */
   author?: Author | null;
   /** The lesson this one was saved from through a «С сохранением» link. */
   sharedSourceId?: string;

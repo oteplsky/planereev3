@@ -519,11 +519,22 @@ export function materialMeta(data: Materials, item: Textbook | Lesson): Material
   return data.textbooks.find((t) => t.id === item.textbookId)?.meta ?? null;
 }
 
-/** Who made a material; null = the teacher. Textbook lessons inherit their textbook's author. */
+/** Who made a material; null = the teacher. A lesson keeps its own author once set; otherwise it's its textbook's. */
 export function materialAuthor(data: Materials, item: Textbook | Lesson): Author | null {
   if ("meta" in item) return item.author;
-  if (item.textbookId === null) return item.author ?? null;
+  if (item.author !== undefined) return item.author;
   return data.textbooks.find((t) => t.id === item.textbookId)?.author ?? null;
+}
+
+/**
+ * Sharing is for the teacher's own work. Someone else's material (a catalog or saved textbook, a lesson
+ * from one) can't be shared at all; an own textbook with someone else's lessons only for viewing.
+ */
+export function shareRules(data: AppData, kind: "lesson" | "textbook", id: string): { share: boolean; save: boolean } {
+  const item = kind === "lesson" ? data.lessons.find((l) => l.id === id) : data.textbooks.find((t) => t.id === id);
+  if (!item || materialAuthor(data, item) !== null) return { share: false, save: false };
+  const lessons = kind === "textbook" ? data.lessons.filter((l) => l.textbookId === id) : [];
+  return { share: true, save: lessons.every((l) => materialAuthor(data, l) === null) };
 }
 
 /** «Источник» filter: the teacher's own materials, or one author's. Null = everything. */
@@ -538,7 +549,7 @@ export function matchesSource(author: Author | null, source: SourceFilter): bool
 export function libraryAuthors(data: Materials): Author[] {
   const byId = new Map<string, Author>();
   for (const item of [...data.textbooks, ...data.lessons]) {
-    const author = "meta" in item || item.textbookId === null ? item.author : null;
+    const author = materialAuthor(data, item);
     if (author) byId.set(author.id, author);
   }
   return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, "ru"));
@@ -1218,12 +1229,45 @@ export function removeLessonFromTextbook(
   const lesson = next.lessons.find((l) => l.id === lessonId);
   if (!lesson || !lesson.textbookId) return data;
   const tb = next.textbooks.find((t) => t.id === lesson.textbookId);
+  lesson.author = materialAuthor(data, lesson);
   detachFromTextbooks(next, lessonId);
   lesson.textbookId = null;
   lesson.folderId = null;
   lesson.position = firstPosition(next, null);
   lesson.updatedAt = now;
   if (tb) tb.updatedAt = now;
+  return next;
+}
+
+/**
+ * «Переместить в учебник»: a standalone lesson, or one from another textbook, goes to the end of the
+ * textbook (of a section when it has sections). It keeps its author and its learners' history.
+ */
+export function moveLessonToTextbook(
+  data: AppData,
+  lessonId: string,
+  textbookId: string,
+  sectionId: string | null,
+  now: string,
+): AppData {
+  const lesson = data.lessons.find((l) => l.id === lessonId);
+  const target = data.textbooks.find((t) => t.id === textbookId);
+  if (!lesson || !target || lesson.textbookId === textbookId) return data;
+  if (target.useSections !== (sectionId !== null)) return data;
+  if (sectionId !== null && !target.sections.some((s) => s.id === sectionId)) return data;
+  const next = clone(data);
+  const moved = next.lessons.find((l) => l.id === lessonId)!;
+  const from = next.textbooks.find((t) => t.id === moved.textbookId);
+  moved.author = materialAuthor(data, lesson);
+  detachFromTextbooks(next, lessonId);
+  moved.textbookId = textbookId;
+  moved.folderId = null;
+  moved.position = undefined;
+  moved.updatedAt = now;
+  const tb = next.textbooks.find((t) => t.id === textbookId)!;
+  (sectionId === null ? tb.looseLessonIds : tb.sections.find((s) => s.id === sectionId)!.lessonIds).push(lessonId);
+  tb.updatedAt = now;
+  if (from) from.updatedAt = now;
   return next;
 }
 

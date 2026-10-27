@@ -5,6 +5,8 @@ import { BookmarkPlus, Eye, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
+import { shareRules } from "@/lib/domain";
+import { useStore } from "@/lib/store";
 import { sharedHref, type ShareAccess, type ShareTarget } from "@/lib/share";
 
 const accessOptions = [
@@ -33,6 +35,7 @@ export function ShareDialog({ open, onClose, target }: ShareDialogProps) {
 
 function ShareForm({ target, onClose }: { target: ShareTarget; onClose: () => void }) {
   const [access, setAccess] = useState<ShareAccess>("view");
+  const canSave = useStore((s) => shareRules(s.data, target.kind, target.id).save);
   const link = shareLink({ kind: target.kind, id: target.id }, access);
 
   const copy = async () => {
@@ -50,20 +53,38 @@ function ShareForm({ target, onClose }: { target: ShareTarget; onClose: () => vo
       <div role="radiogroup" aria-label="Доступ" className="grid gap-2 sm:grid-cols-2">
         {accessOptions.map(({ value, label, icon: Icon }) => {
           const selected = value === access;
+          // Someone else's lessons inside: only for viewing.
+          const locked = value === "save" && !canSave;
           return (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              onClick={() => setAccess(value)}
-              className={`flex items-center gap-3 rounded-md border px-3 py-3 text-left font-semibold transition-colors duration-[120ms] ${
-                selected ? "border-action bg-selected text-action" : "border-line-strong hover:bg-hover"
-              }`}
-            >
-              <Icon size={20} strokeWidth={1.75} aria-hidden />
-              {label}
-            </button>
+            <span key={value} className="group relative flex">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                aria-disabled={locked || undefined}
+                aria-describedby={locked ? "share-save-locked" : undefined}
+                onClick={() => !locked && setAccess(value)}
+                className={`flex flex-1 items-center gap-3 rounded-md border px-3 py-3 text-left font-semibold transition-colors duration-[120ms] ${
+                  selected
+                    ? "border-action bg-selected text-action"
+                    : locked
+                      ? "cursor-not-allowed border-line text-ink-secondary opacity-60"
+                      : "border-line-strong hover:bg-hover"
+                }`}
+              >
+                <Icon size={20} strokeWidth={1.75} aria-hidden />
+                {label}
+              </button>
+              {locked && (
+                <span
+                  id="share-save-locked"
+                  role="tooltip"
+                  className="pointer-events-none absolute top-full left-0 z-30 mt-2 w-max max-w-72 rounded-sm bg-neutral-900 px-3 py-2 text-caption text-white opacity-0 shadow-2 transition-opacity duration-[120ms] group-focus-within:opacity-100 group-hover:opacity-100"
+                >
+                  В учебнике есть чужие уроки
+                </span>
+              )}
+            </span>
           );
         })}
       </div>
