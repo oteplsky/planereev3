@@ -5,19 +5,14 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { useStore, type PrototypeSettings, type Scenario, type Variant } from "@/lib/store";
-
-const variants: { value: Variant; title: string; caption: string }[] = [
-  { value: "a", title: "Версия A", caption: "«Библиотека» и «+» рядом, каталог в шапке" },
-  { value: "b", title: "Версия B", caption: "«+» в «Библиотеке», каталог в материалах" },
-];
+import { useStore, type PrototypeSettings, type Scenario } from "@/lib/store";
 
 const scenarios: { value: Scenario; title: string; caption: string }[] = [
   { value: "demo", title: "Демо", caption: "Ученики, группы, материалы" },
   { value: "empty", title: "Новый преподаватель", caption: "Без учеников и материалов" },
 ];
 
-/** Step before the prototype: pick a design version and the data it starts from. */
+/** Step before the prototype: pick the data it starts from. */
 export function PrototypeLauncher() {
   const router = useRouter();
   const current = useStore((s) => s.prototype);
@@ -27,23 +22,12 @@ export function PrototypeLauncher() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 py-8">
       <h1 className="text-h1">Прототип</h1>
-      <OptionGroup label="Версия">
-        {variants.map((v) => (
-          <Option
-            key={v.value}
-            selected={picked.variant === v.value}
-            onSelect={() => setPicked({ ...picked, variant: v.value })}
-            title={v.title}
-            caption={v.caption}
-          />
-        ))}
-      </OptionGroup>
       <OptionGroup label="Данные">
         {scenarios.map((s) => (
           <Option
             key={s.value}
             selected={picked.scenario === s.value}
-            onSelect={() => setPicked({ ...picked, scenario: s.value })}
+            onSelect={() => setPicked({ scenario: s.value })}
             title={s.title}
             caption={s.caption}
           />
@@ -97,10 +81,10 @@ function Option({ selected, onSelect, title, caption }: { selected: boolean; onS
   );
 }
 
-/** Corner badge on every screen: which version is open, and the way back to the launcher. */
+/** Corner badge on every screen: which data is open, and the way back to the launcher. */
 export function PrototypeBadge() {
   const hydrated = useStore((s) => s.hydrated);
-  const { variant, scenario } = useStore((s) => s.prototype);
+  const { scenario } = useStore((s) => s.prototype);
   const onLauncher = usePathname() === "/prototype";
   if (!hydrated || onLauncher) return null;
   return (
@@ -108,7 +92,7 @@ export function PrototypeBadge() {
       href="/prototype"
       className="fixed right-4 bottom-4 z-40 rounded-full border border-line bg-surface px-3 py-1.5 text-caption font-semibold text-ink-secondary shadow-1 transition-colors duration-[120ms] hover:text-ink"
     >
-      {variant.toUpperCase()} · {scenarios.find((s) => s.value === scenario)?.title}
+      {scenarios.find((s) => s.value === scenario)?.title}
     </Link>
   );
 }

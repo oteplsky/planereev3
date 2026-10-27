@@ -213,15 +213,16 @@ function LessonEditor({
   return (
     <BlockEditor
       initial={blocks}
+      initialTitle={lesson.title}
       banner={banner}
       saveLabel={learner ? `Сохранить ${forLearner(learner)}` : "Сохранить для всех"}
       onCancel={onDone}
-      onSave={(next) => {
+      onSave={(next, title) => {
         if (learner) {
-          updateLearner(learner.id, lesson.id, { blocks: markAdapted(blocks, next) });
+          updateLearner(learner.id, lesson.id, { blocks: markAdapted(blocks, next) }, title);
           toast(`Сохранено только ${forLearner(learner)}`);
         } else {
-          updateGlobal(lesson.id, { blocks: next });
+          updateGlobal(lesson.id, { blocks: next }, title);
           toast("Общий материал обновлён");
         }
         onDone();

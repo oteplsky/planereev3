@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { Menu, type MenuItem } from "@/components/ui/Menu";
-import { catalogHref } from "@/lib/context";
 import { crm } from "@/lib/crm";
-import { useStore, useVariant } from "@/lib/store";
+import { useStore } from "@/lib/store";
 
 const go = (href: string) => () => window.location.assign(href);
 
@@ -38,7 +37,7 @@ export function AppHeader() {
         </Link>
 
         <nav aria-label="Разделы" className="-my-px flex h-full min-w-0 items-stretch gap-5 overflow-x-auto [scrollbar-width:none] sm:gap-6">
-          <Suspense fallback={<NavLinks learnerId={null} inCatalog={null} />}>
+          <Suspense fallback={<NavLinks inCatalog={null} />}>
             <ContextNavLinks />
           </Suspense>
         </nav>
@@ -71,15 +70,13 @@ export function AppHeader() {
 
 /** In a learner context the catalog link carries the way back to that learner. */
 function ContextNavLinks() {
-  const learnerId = useSearchParams().get("learner");
   const inCatalog = usePathname().startsWith("/catalog");
-  return <NavLinks learnerId={learnerId} inCatalog={inCatalog} />;
+  return <NavLinks inCatalog={inCatalog} />;
 }
 
 /** `inCatalog` is null while the URL is unknown (prerender): no section is marked current. */
-function NavLinks({ learnerId, inCatalog }: { learnerId: string | null; inCatalog: boolean | null }) {
-  // Version B: the catalog is a switch inside the library's materials.
-  const withCatalog = useVariant() === "a";
+function NavLinks({ inCatalog }: { inCatalog: boolean | null }) {
+  // The catalog is a switch inside the library's materials.
   return (
     <>
       <NavLink href={crm.schedule} current={false} external>
@@ -88,14 +85,9 @@ function NavLinks({ learnerId, inCatalog }: { learnerId: string | null; inCatalo
       <NavLink href={crm.students} current={false} external>
         Ученики
       </NavLink>
-      <NavLink href="/library" current={withCatalog ? inCatalog === false : inCatalog !== null}>
+      <NavLink href="/library" current={inCatalog !== null}>
         Библиотека
       </NavLink>
-      {withCatalog && (
-        <NavLink href={catalogHref("/catalog", learnerId)} current={inCatalog === true}>
-          Каталог
-        </NavLink>
-      )}
     </>
   );
 }

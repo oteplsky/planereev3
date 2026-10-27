@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowRight, ArrowUp, BookX, Check, Ellipsis, FolderOutput, GripVertical, ListPlus, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, BookX, Check, Ellipsis, FolderOutput, GripVertical, ListPlus, Pencil, Plus, Trash2 } from "lucide-react";
 import { ActionsMenu, type CardActions } from "@/components/library/Cards";
 import { LibraryDialogs, requestDelete, type DialogState } from "@/components/library/LibraryDialogs";
-import { LessonStatusChips, StatusChip } from "@/components/ui/Badge";
+import { LessonStatusChips } from "@/components/ui/Badge";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Button, IconButton } from "@/components/ui/Button";
 import { ConfirmDialog, Dialog, PromptDialog } from "@/components/ui/Dialog";
@@ -16,14 +16,16 @@ import { Switch } from "@/components/ui/Switch";
 import { toast } from "@/components/ui/Toast";
 import { contextHref, useActiveLearner } from "@/lib/context";
 import {
-  deleteSection,
   folderPath,
   homeworkStatusForLearner,
+  lessonHasLearnerActivity,
   lessonStatusForLearner,
+  lessonTitleFor,
   textbookLessonCount,
   textbookLessons,
   textbookProgress,
 } from "@/lib/domain";
+import { KEPT_FOR_LEARNERS } from "@/lib/messages";
 import { useStore } from "@/lib/store";
 import type { Lesson, Textbook, TextbookSection } from "@/lib/types";
 import { TextbookHeader } from "./TextbookHeader";
@@ -153,21 +155,7 @@ export function TextbookScreen() {
 
   // ── Actions ──
 
-  const requestSectionDelete = (section: TextbookSection) => {
-    // Dry run against the pure rule: explain a block up front instead of confirming first.
-    const check = deleteSection(data, textbook.id, section.id, new Date().toISOString());
-    if (!check.ok) {
-      setLibDialog({
-        type: "blocked",
-        reason: check.reason,
-        title: "В разделе есть уроки, по которым уже занимались",
-        description:
-          "Удаление раздела удалит и его уроки, а с ними — историю и домашние задания учеников. Перенесите эти уроки в другой раздел или уберите из учебника, а потом удалите раздел.",
-      });
-      return;
-    }
-    setDialog({ type: "deleteSection", section });
-  };
+  const requestSectionDelete = (section: TextbookSection) => setDialog({ type: "deleteSection", section });
 
   const lessonActions = (lesson: Lesson, container: string | null): CardActions => {
     const target = { kind: "lesson" as const, id: lesson.id, title: lesson.title };
@@ -220,19 +208,13 @@ export function TextbookScreen() {
           >
             {indicatorAt(i)}
             <LessonRow
-              lesson={lesson}
+              lesson={learnerId ? { ...lesson, title: lessonTitleFor(data, lesson, learnerId) } : lesson}
               number={lessonNumber(lesson.id)}
               href={contextHref(`/lesson/${lesson.id}`, learnerId)}
               dragging={drag?.id === lesson.id}
-              highlighted={progress?.next?.id === lesson.id}
               status={
                 learnerId && (
                   <>
-                    {progress?.next?.id === lesson.id && (
-                      <StatusChip icon={<ArrowRight size={14} strokeWidth={2.5} className="ml-0.5 text-action" aria-hidden />}>
-                        Следующий
-                      </StatusChip>
-                    )}
                     <LessonStatusChips
                       lesson={lessonStatusForLearner(data, learnerId, lesson.id)}
                       homework={homeworkStatusForLearner(data, learnerId, lesson.id)}
@@ -467,21 +449,17 @@ interface LessonRowProps {
   number: number;
   href: string;
   dragging?: boolean;
-  /** The learner's next lesson. */
-  highlighted?: boolean;
   status?: ReactNode;
   handle?: ReactNode;
   actions?: CardActions;
 }
 
 /** One lesson in the textbook's order: the whole row opens it; handle and menu stay separate controls. */
-export function LessonRow({ lesson, number, href, dragging = false, highlighted = false, status, handle, actions }: LessonRowProps) {
+export function LessonRow({ lesson, number, href, dragging = false, status, handle, actions }: LessonRowProps) {
   return (
     <div
       data-drag-row
-      className={`group relative flex min-h-14 items-center gap-3 rounded-lg border bg-surface py-2 pr-2 transition-[border-color,opacity] duration-[120ms] ${
-        highlighted ? "border-action" : "border-line hover:border-line-strong"
-      } ${
+      className={`group relative flex min-h-14 items-center gap-3 rounded-lg border bg-surface py-2 pr-2 transition-[border-color,opacity] duration-[120ms] border-line hover:border-line-strong ${
         handle ? "pl-1" : "pl-3"
       } ${dragging ? "opacity-40" : ""}`}
     >
@@ -556,7 +534,11 @@ function TextbookDialogs({
       <ConfirmDialog
         open={state?.type === "deleteSection"}
         title="Удалить раздел?"
-        description="Раздел и все уроки внутри него будут удалены. Это действие нельзя отменить."
+        description={`Раздел и все уроки внутри него будут удалены. ${
+          state?.type === "deleteSection" && state.section.lessonIds.some((id) => lessonHasLearnerActivity(store.data, id))
+            ? KEPT_FOR_LEARNERS
+            : "Это действие нельзя отменить."
+        }`}
         confirmLabel="Удалить раздел"
         onClose={onClose}
         onConfirm={() => {

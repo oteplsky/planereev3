@@ -22,15 +22,9 @@ const STORAGE_VERSION = 6;
 
 const now = () => new Date().toISOString();
 
-/**
- * Prototype launcher (/prototype): which design version is shown and which data it starts from.
- * A — «Библиотека» and «+» are separate items; B — «Библиотека» carries the «+» and the catalog
- * lives in the materials switch instead of the top nav.
- */
-export type Variant = "a" | "b";
+/** Prototype launcher (/prototype): which data the prototype starts from. */
 export type Scenario = "demo" | "empty";
 export interface PrototypeSettings {
-  variant: Variant;
   scenario: Scenario;
 }
 
@@ -44,7 +38,7 @@ interface Store {
   hydrated: boolean;
   prototype: PrototypeSettings;
 
-  /** Opens a version with its starting data; data edited so far is replaced. */
+  /** Opens the prototype with its starting data; data edited so far is replaced. */
   startPrototype(settings: PrototypeSettings): void;
 
   // Folders
@@ -81,11 +75,12 @@ interface Store {
   removeLessonFromTextbook(lessonId: string): void;
 
   // Lesson content
-  updateGlobalLessonContent(lessonId: string, content: MockLessonContent): void;
+  updateGlobalLessonContent(lessonId: string, content: MockLessonContent, title?: string): void;
   updateLearnerLessonContent(
     learnerId: string,
     lessonId: string,
     content: MockLessonContent,
+    title?: string,
   ): void;
 
   // Lesson lifecycle
@@ -95,10 +90,6 @@ interface Store {
   // Homework
   assignHomework(learnerId: string, lessonId: string, target: d.HomeworkTarget): string;
   setHomeworkStatus(homeworkId: string, status: HomeworkStatus): void;
-
-  // Groups
-  addGroupMembers(groupId: string, learnerIds: string[]): void;
-  removeGroupMember(groupId: string, learnerId: string): void;
 
   resetDemoData(): void;
 }
@@ -117,7 +108,7 @@ export const useStore = create<Store>()(
       return {
         data: createDemoData(),
         hydrated: false,
-        prototype: { variant: "a", scenario: "demo" },
+        prototype: { scenario: "demo" },
 
         startPrototype: (settings) => set({ prototype: settings, data: seed(settings.scenario) }),
 
@@ -145,8 +136,6 @@ export const useStore = create<Store>()(
         renameMaterial: (kind, id, title) =>
           commit(d.renameMaterial(data(), kind, id, title, now())),
         moveMaterial: (kind, id, folderId) => commit(d.moveMaterial(data(), kind, id, folderId)),
-        addGroupMembers: (groupId, learnerIds) => commit(d.addGroupMembers(data(), groupId, learnerIds)),
-        removeGroupMember: (groupId, learnerId) => commit(d.removeGroupMember(data(), groupId, learnerId)),
         setCover: (kind, id, cover) => commit(d.setCover(data(), kind, id, cover)),
         duplicateMaterial(kind, id) {
           if (kind === "lesson") {
@@ -177,10 +166,10 @@ export const useStore = create<Store>()(
         removeLessonFromTextbook: (lessonId) =>
           commit(d.removeLessonFromTextbook(data(), lessonId, now())),
 
-        updateGlobalLessonContent: (lessonId, content) =>
-          commit(d.updateGlobalLessonContent(data(), lessonId, content, now())),
-        updateLearnerLessonContent: (learnerId, lessonId, content) =>
-          commit(d.updateLearnerLessonContent(data(), learnerId, lessonId, content, now())),
+        updateGlobalLessonContent: (lessonId, content, title) =>
+          commit(d.updateGlobalLessonContent(data(), lessonId, content, now(), title)),
+        updateLearnerLessonContent: (learnerId, lessonId, content, title) =>
+          commit(d.updateLearnerLessonContent(data(), learnerId, lessonId, content, now(), title)),
 
         startLesson(learnerId, lessonId) {
           const r = d.startLesson(data(), learnerId, lessonId, now());
@@ -213,7 +202,7 @@ export const useStore = create<Store>()(
         return {
           ...current,
           ...(saved?.data ? { data: d.migrateData(saved.data) } : {}),
-          ...(saved?.prototype ? { prototype: saved.prototype } : {}),
+          ...(saved?.prototype ? { prototype: { scenario: saved.prototype.scenario } } : {}),
         };
       },
       // Hydrated explicitly on the client (see StoreGate) to avoid SSR mismatches.
@@ -222,5 +211,3 @@ export const useStore = create<Store>()(
     },
   ),
 );
-
-export const useVariant = () => useStore((s) => s.prototype.variant);

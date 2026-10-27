@@ -1,15 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, LibraryBig, Plus, Search, UserPlus, Users } from "lucide-react";
+import { ChevronDown, LibraryBig, Search } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
-import { Menu } from "@/components/ui/Menu";
 import { contextHref } from "@/lib/context";
-import { crm } from "@/lib/crm";
 import { learnerTypeLabel, shortName } from "@/lib/learners";
-import { useStore, useVariant } from "@/lib/store";
+import { useStore } from "@/lib/store";
 
 const ITEM_WIDTH = 104;
 const GAP = 8;
@@ -19,13 +16,11 @@ interface LearnerSelectorProps {
 }
 
 /**
- * Primary context switch (spec §4.1). Version A: «Библиотека», «Добавить», then learners and groups.
- * Version B: «Библиотека» itself carries the «+» (add a student or a group), then learners.
+ * Primary context switch (spec §4.1): «Библиотека», then learners. Adding students and groups lives in the CRM.
  * One row shows as many as fit; «Ещё N» unfolds the rest below, with a search on top.
  */
 export function LearnerSelector({ activeLearnerId }: LearnerSelectorProps) {
   const learners = useStore((s) => s.data.learners);
-  const variant = useVariant();
   const listRef = useRef<HTMLDivElement>(null);
   const [capacity, setCapacity] = useState(4);
   const [expanded, setExpanded] = useState(false);
@@ -80,25 +75,18 @@ export function LearnerSelector({ activeLearnerId }: LearnerSelectorProps) {
 
       <div className="flex items-center gap-4">
         <div className={`flex min-w-0 flex-1 gap-x-2 ${expanded ? "flex-wrap gap-y-4" : ""}`}>
-          {variant === "b" ? (
-            <LibraryWithAdd selected={activeLearnerId === null} />
-          ) : (
-            <>
-              <SelectorItem
-                href="/library"
-                label="Библиотека"
-                selected={activeLearnerId === null}
-                icon={
-                  <span className="grid size-14 place-items-center rounded-full bg-action text-white">
-                    <LibraryBig size={26} strokeWidth={1.75} />
-                  </span>
-                }
-              />
-              {/* Adding a student happens in the CRM for now; the flow will move here later. */}
-              <SelectorItem href={crm.students} external label="Добавить" title="Добавить ученика" selected={false} icon={<PlusCircle />} />
-            </>
-          )}
-          {/* Collapsed, only this part clips, so the «+» menu before it isn't cut off. Expanded, it joins the wrap. */}
+          <SelectorItem
+            href="/library"
+            label="Библиотека"
+            selected={activeLearnerId === null}
+            onClick={collapse}
+            icon={
+              <span className="grid size-12 place-items-center rounded-full bg-action text-white transition-colors duration-[120ms] group-hover:bg-action-hover">
+                <LibraryBig size={22} strokeWidth={1.75} />
+              </span>
+            }
+          />
+          {/* Collapsed, only this part clips. Expanded, it joins the wrap. */}
           <div ref={listRef} className={expanded ? "contents" : "flex min-w-0 flex-1 gap-2 overflow-hidden"}>
             {shown.map((learner) => (
               <SelectorItem
@@ -107,7 +95,7 @@ export function LearnerSelector({ activeLearnerId }: LearnerSelectorProps) {
                 label={shortName(learner)}
                 title={`${learner.name} · ${learnerTypeLabel(learner)}`}
                 selected={learner.id === activeLearnerId}
-                icon={<Avatar learner={learner} size="xl" />}
+                icon={<Avatar learner={learner} size="selector" />}
                 onClick={collapse}
               />
             ))}
@@ -136,70 +124,18 @@ function ExpandButton({ expanded = false, label, onClick, className = "" }: { ex
   );
 }
 
-function PlusCircle({ solid = false }: { solid?: boolean }) {
-  return (
-    <span
-      className={`grid size-14 place-items-center rounded-full transition-colors duration-[120ms] ${
-        solid
-          ? "bg-action text-white group-hover:bg-action-hover"
-          : "border border-dashed border-line-strong text-ink-secondary group-hover:border-action group-hover:bg-selected group-hover:text-action"
-      }`}
-    >
-      <Plus size={24} strokeWidth={1.75} />
-    </span>
-  );
-}
-
-/**
- * Version B: one item for the two main actions. It opens the library — all the teacher's materials —
- * and offers to add a student or a group (in the CRM for now).
- */
-function LibraryWithAdd({ selected }: { selected: boolean }) {
-  const router = useRouter();
-  const toCrm = () => window.location.assign(crm.students);
-  return (
-    <div className="shrink-0">
-      <Menu
-        align="left"
-        items={[
-          { label: "Добавить ученика", icon: <UserPlus size={18} strokeWidth={1.75} aria-hidden />, onSelect: toCrm },
-          { label: "Добавить группу", icon: <Users size={18} strokeWidth={1.75} aria-hidden />, onSelect: toCrm },
-        ]}
-        trigger={({ onClick, ...props }) => (
-          <button
-            {...props}
-            type="button"
-            aria-current={selected ? "page" : undefined}
-            onClick={() => {
-              if (!selected) router.push("/library");
-              onClick();
-            }}
-            className="group flex flex-col items-center gap-2 rounded-md py-1"
-            style={{ width: ITEM_WIDTH }}
-          >
-            <ItemFace selected={selected} label="Библиотека" icon={<PlusCircle solid />} />
-          </button>
-        )}
-      />
-    </div>
-  );
-}
-
 interface SelectorItemProps {
   href: string;
   label: string;
   title?: string;
   selected: boolean;
   icon: React.ReactNode;
-  /** A page outside the LMS (the CRM), opened as a regular page load. */
-  external?: boolean;
   onClick?: () => void;
 }
 
-function SelectorItem({ href, label, title, selected, icon, external, onClick }: SelectorItemProps) {
-  const Anchor = external ? "a" : Link;
+function SelectorItem({ href, label, title, selected, icon, onClick }: SelectorItemProps) {
   return (
-    <Anchor
+    <Link
       href={href}
       title={title}
       onClick={onClick}
@@ -208,7 +144,7 @@ function SelectorItem({ href, label, title, selected, icon, external, onClick }:
       style={{ width: ITEM_WIDTH }}
     >
       <ItemFace selected={selected} label={label} icon={icon} />
-    </Anchor>
+    </Link>
   );
 }
 

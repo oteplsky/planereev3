@@ -25,8 +25,8 @@ export function CatalogLessonScreen() {
       <EmptyState
         icon={<FileX size={28} strokeWidth={1.5} aria-hidden />}
         title="Урок не найден"
-        description="Возможно, его убрали из каталога."
-        action={<Button onClick={() => router.push(catalogHref("/catalog", fromId))}>В каталог</Button>}
+        description="Возможно, его убрали из готовых материалов."
+        action={<Button onClick={() => router.push(catalogHref("/catalog", fromId))}>К готовым материалам</Button>}
       />
     );
   }

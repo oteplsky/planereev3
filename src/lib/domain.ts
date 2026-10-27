@@ -48,6 +48,30 @@ export function findLearnerLesson(
 }
 
 /**
+ * The lesson as a learner sees it: the original under their own title, or — once the original is deleted
+ * from the library — rebuilt from their copy, outside any textbook or folder.
+ */
+export function lessonForCopy(data: AppData, learnerLesson: LearnerLesson): Lesson | null {
+  const source = data.lessons.find((l) => l.id === learnerLesson.sourceLessonId);
+  if (source) return learnerLesson.title ? { ...source, title: learnerLesson.title } : source;
+  if (!learnerLesson.title) return null;
+  return {
+    id: learnerLesson.sourceLessonId,
+    title: learnerLesson.title,
+    textbookId: null,
+    folderId: null,
+    content: learnerLesson.content,
+    cover: null,
+    updatedAt: learnerLesson.updatedAt,
+  };
+}
+
+/** A lesson's title in a context: the learner's own one when they have it. */
+export function lessonTitleFor(data: AppData, lesson: Lesson, learnerId: string | null): string {
+  return (learnerId && findLearnerLesson(data, learnerId, lesson.id)?.title) || lesson.title;
+}
+
+/**
  * Which content a context sees. Read-only: never creates a learner version,
  * so browsing the library has no side effects (spec §3.2).
  */
@@ -56,11 +80,13 @@ export function resolveLesson(
   lessonId: string,
   learnerId: string | null,
 ): ResolvedLesson | null {
-  const lesson = data.lessons.find((l) => l.id === lessonId);
-  if (!lesson) return null;
   const learnerLesson = learnerId
     ? (findLearnerLesson(data, learnerId, lessonId) ?? null)
     : null;
+  const lesson = learnerLesson
+    ? lessonForCopy(data, learnerLesson)
+    : data.lessons.find((l) => l.id === lessonId);
+  if (!lesson) return null;
   return {
     lesson,
     content: learnerLesson ? learnerLesson.content : lesson.content,
@@ -88,6 +114,7 @@ export function ensureLearnerLesson(
     id: makeId("ll"),
     learnerId,
     sourceLessonId: lessonId,
+    title: null,
     content: clone(lesson.content),
     createdAt: now,
     updatedAt: now,
@@ -105,27 +132,35 @@ export function updateGlobalLessonContent(
   lessonId: string,
   content: MockLessonContent,
   now: string,
+  title?: string,
 ): AppData {
   const next = clone(data);
   const lesson = next.lessons.find((l) => l.id === lessonId);
   if (!lesson) return data;
   lesson.content = clone(content);
+  if (title?.trim()) lesson.title = title.trim();
   lesson.updatedAt = now;
   return next;
 }
 
-/** Edit only this learner's version, creating it first if needed. */
+/**
+ * Edit only this learner's version, creating it first if needed. A title equal to the original's
+ * goes back to following it.
+ */
 export function updateLearnerLessonContent(
   data: AppData,
   learnerId: string,
   lessonId: string,
   content: MockLessonContent,
   now: string,
+  title?: string,
 ): AppData {
   const ensured = ensureLearnerLesson(data, learnerId, lessonId, now);
   const next = clone(ensured.data);
   const ll = next.learnerLessons.find((x) => x.id === ensured.learnerLesson.id)!;
   ll.content = clone(content);
+  const source = next.lessons.find((l) => l.id === lessonId);
+  if (title?.trim()) ll.title = source && title.trim() === source.title ? null : title.trim();
   ll.updatedAt = now;
   return next;
 }
@@ -256,7 +291,7 @@ export function getLessonHistory(data: AppData, learnerId: string): HistoryEntry
     if (learnerLesson.learnerId !== learnerId) continue;
     const session = latestByLearnerLesson.get(learnerLesson.id);
     const homework = data.homework.filter((h) => h.learnerLessonId === learnerLesson.id);
-    const lesson = data.lessons.find((l) => l.id === learnerLesson.sourceLessonId);
+    const lesson = lessonForCopy(data, learnerLesson);
     if (!lesson || (!session && homework.length === 0)) continue;
     const activity = [
       session?.lastActivityAt,
@@ -280,17 +315,12 @@ export function homeworkStatusForLearner(data: AppData, learnerId: string, lesso
   return ll ? homeworkSummary(data.homework.filter((h) => h.learnerLessonId === ll.id)) : null;
 }
 
-/** A learner's way through one textbook: how far they've got and what comes next. */
+/** How far a learner has got through one textbook. No learning path: nothing is suggested as next. */
 export interface TextbookProgress {
   textbook: Textbook;
   total: number;
   /** Lessons whose latest session with the learner is finished. */
   completed: number;
-  /**
-   * The first untouched lesson after the furthest one taught (started or finished). Lessons the teacher
-   * skipped earlier aren't suggested: skipping is usually deliberate. Null when nothing is left after it.
-   */
-  next: Lesson | null;
   lastActivityAt: string;
 }
 
@@ -302,12 +332,10 @@ export function textbookProgress(data: AppData, learnerId: string, textbook: Tex
   if (entries.length === 0) return null;
 
   const status = (lessonId: string) => entries.find((e) => e.lesson.id === lessonId)?.status ?? null;
-  const furthest = ordered.findLastIndex((l) => status(l.id) !== null);
   return {
     textbook,
     total: ordered.length,
     completed: ordered.filter((l) => status(l.id) === "completed").length,
-    next: ordered.slice(furthest + 1).find((l) => status(l.id) === null) ?? null,
     lastActivityAt: entries[0].lastActivityAt,
   };
 }
@@ -344,7 +372,7 @@ export function lessonStatusForLearner(
 /** The global lesson (and its textbook) behind a learner's lesson. */
 export function lessonOfLearnerLesson(data: AppData, learnerLessonId: string) {
   const ll = data.learnerLessons.find((x) => x.id === learnerLessonId);
-  const lesson = ll && data.lessons.find((l) => l.id === ll.sourceLessonId);
+  const lesson = ll && lessonForCopy(data, ll);
   if (!lesson) return null;
   return { lesson, textbook: data.textbooks.find((t) => t.id === lesson.textbookId) ?? null };
 }
@@ -550,6 +578,7 @@ export function filterLevelOptions(data: Materials, filters: MetaFilters): Level
 export function migrateData(data: AppData): AppData {
   return {
     ...data,
+    learnerLessons: data.learnerLessons.map((ll) => ({ ...ll, title: ll.title ?? null })),
     textbooks: data.textbooks.map((t) => ({
       ...t,
       meta: migrateMeta(t.meta),
@@ -880,30 +909,31 @@ function detachFromTextbooks(next: AppData, lessonId: string) {
   }
 }
 
+/**
+ * Removes lessons from the library. Learners keep their copies — with the title they knew — so their
+ * history and homework stay as they were.
+ */
 function removeLessons(next: AppData, lessonIds: string[]) {
   const ids = new Set(lessonIds);
+  for (const ll of next.learnerLessons) {
+    if (ids.has(ll.sourceLessonId)) ll.title ??= next.lessons.find((l) => l.id === ll.sourceLessonId)?.title ?? null;
+  }
   next.lessons = next.lessons.filter((l) => !ids.has(l.id));
   for (const id of ids) detachFromTextbooks(next, id);
 }
 
-/** Blocked while learner history depends on the lesson (spec §5.5). */
+/** Learners who worked with the lesson keep their copy (see `removeLessons`). */
 export function deleteLesson(data: AppData, lessonId: string): Result {
   if (!data.lessons.some((l) => l.id === lessonId)) return { ok: false, reason: "not_found" };
-  if (lessonHasLearnerActivity(data, lessonId)) {
-    return { ok: false, reason: "has_learner_activity" };
-  }
   const next = clone(data);
   removeLessons(next, [lessonId]);
   return ok(next);
 }
 
-/** Deletes the textbook and its lessons; blocked if any of those lessons has learner activity. */
+/** Deletes the textbook and its lessons; learners keep their copies. */
 export function deleteTextbook(data: AppData, textbookId: string): Result {
   if (!data.textbooks.some((t) => t.id === textbookId)) return { ok: false, reason: "not_found" };
   const lessonIds = data.lessons.filter((l) => l.textbookId === textbookId).map((l) => l.id);
-  if (lessonIds.some((id) => lessonHasLearnerActivity(data, id))) {
-    return { ok: false, reason: "has_learner_activity" };
-  }
   const next = clone(data);
   removeLessons(next, lessonIds);
   next.textbooks = next.textbooks.filter((t) => t.id !== textbookId);
@@ -1002,7 +1032,7 @@ export function moveSectionTo(
   );
 }
 
-/** Deletes the section together with its lessons (spec §6.1), with the same dependency rule. */
+/** Deletes the section together with its lessons (spec §6.1); learners keep their copies. */
 export function deleteSection(
   data: AppData,
   textbookId: string,
@@ -1012,9 +1042,6 @@ export function deleteSection(
   const tb = data.textbooks.find((t) => t.id === textbookId);
   const section = tb?.sections.find((s) => s.id === sectionId);
   if (!tb || !section) return { ok: false, reason: "not_found" };
-  if (section.lessonIds.some((id) => lessonHasLearnerActivity(data, id))) {
-    return { ok: false, reason: "has_learner_activity" };
-  }
   const withoutLessons = clone(data);
   removeLessons(withoutLessons, section.lessonIds);
   return ok(
@@ -1080,28 +1107,4 @@ export function textbookLessons(data: Materials, textbook: Textbook) {
       .map((s) => ({ section: s, lessons: s.lessonIds.map(byId).filter((l) => !!l) })),
     loose: textbook.looseLessonIds.map(byId).filter((l) => !!l),
   };
-}
-
-// ───────────────────────── Groups ─────────────────────────
-
-/** Adds students to a group; unknown ids, groups and existing members are ignored. */
-export function addGroupMembers(data: AppData, groupId: string, learnerIds: string[]): AppData {
-  const next = clone(data);
-  const group = next.learners.find((l) => l.id === groupId && l.type === "group");
-  if (!group) return data;
-  const members = new Set(group.memberIds ?? []);
-  for (const id of learnerIds) {
-    if (next.learners.some((l) => l.id === id && l.type === "individual")) members.add(id);
-  }
-  group.memberIds = [...members];
-  return next;
-}
-
-/** Takes a student out of a group. Their history and own page are untouched. */
-export function removeGroupMember(data: AppData, groupId: string, learnerId: string): AppData {
-  const next = clone(data);
-  const group = next.learners.find((l) => l.id === groupId && l.type === "group");
-  if (!group?.memberIds?.includes(learnerId)) return data;
-  group.memberIds = group.memberIds.filter((id) => id !== learnerId);
-  return next;
 }

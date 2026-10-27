@@ -15,11 +15,11 @@ import { metaSummary } from "@/lib/meta";
 import type { Learner, Lesson } from "@/lib/types";
 import { AddToLibrary } from "./AddToLibrary";
 
-/** «Анна › Каталог»: the way back to the learner the teacher came from, then the catalog. */
+/** «Анна › Готовые материалы»: the way back to the learner the teacher came from, then the catalog. */
 export function catalogCrumbs(from: Learner | null): Crumb[] {
   return [
     ...(from ? [{ label: from.name, href: contextHref("/library", from.id) }] : []),
-    { label: "Каталог", href: catalogHref("/catalog", from?.id ?? null) },
+    { label: "Готовые материалы", href: catalogHref("/catalog", from?.id ?? null) },
   ];
 }
 
@@ -36,8 +36,8 @@ export function CatalogTextbookScreen() {
       <EmptyState
         icon={<BookX size={28} strokeWidth={1.5} aria-hidden />}
         title="Учебник не найден"
-        description="Возможно, его убрали из каталога."
-        action={<Button onClick={() => router.push(catalogHref("/catalog", fromId))}>В каталог</Button>}
+        description="Возможно, его убрали из готовых материалов."
+        action={<Button onClick={() => router.push(catalogHref("/catalog", fromId))}>К готовым материалам</Button>}
       />
     );
   }

@@ -3,75 +3,66 @@
 import { useState } from "react";
 import Link from "next/link";
 import { History } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonClass } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { homeworkChipLabel, homeworkStatus, lessonStatus } from "@/components/ui/Badge";
 import { FilterChips } from "@/components/ui/FilterChips";
 import { contextHref } from "@/lib/context";
-import { getCurrentSession, getLessonHistory, learnerTextbooks, type HistoryEntry } from "@/lib/domain";
+import { getCurrentSession, getLessonHistory, lessonOfLearnerLesson, type HistoryEntry } from "@/lib/domain";
 import { formatDate } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { HomeworkStatus, Learner } from "@/lib/types";
-import { CurrentLesson } from "./LearnerCards";
-import { NextLesson } from "./NextLesson";
 
-/** Homework in this status waits for the teacher, so it is the one thing the history button counts. */
+/** Homework in this status waits for the teacher: set in ink in the history. */
 const NEEDS_ATTENTION: HomeworkStatus = "completed";
 
 /**
- * Learner layer above the shared library (spec §7.1): the current lesson — or, when none is in progress,
- * the next one. Lesson history stays one quiet click away, counting only homework that waits for the teacher.
+ * Learner actions next to the name (spec §7.1): lesson history one quiet click away, then one way back
+ * to the lesson — the one in progress, or else the latest one. No learning path: nothing is suggested.
  */
-export function LearnerWorkspace({ learner }: { learner: Learner }) {
+export function LearnerActions({ learner }: { learner: Learner }) {
   const data = useStore((s) => s.data);
   const [showAll, setShowAll] = useState(false);
   const current = getCurrentSession(data, learner.id);
+  const inProgress = current && lessonOfLearnerLesson(data, current.learnerLessonId);
   const history = getLessonHistory(data, learner.id);
-  const upNext = learnerTextbooks(data, learner.id).find((p) => p.next);
-  const waiting = history.filter((h) => h.homework === NEEDS_ATTENTION).length;
+  const latest = history[0]?.lesson;
 
   return (
-    <div className="flex flex-col items-start gap-2">
-      <div className="w-full">
-        {!current && upNext?.next ? (
-          <NextLesson learner={learner} progress={upNext} lesson={upNext.next} />
-        ) : (
-          <CurrentLesson session={current} />
-        )}
-      </div>
-
+    <div className="flex flex-wrap items-center gap-2">
       {history.length > 0 && (
         <>
           <Button
             variant="ghost"
-            size="sm"
-            icon={<History size={16} strokeWidth={1.75} aria-hidden />}
-            aria-label={waiting > 0 ? `История уроков, ${waiting} ${homeworkWord(waiting)} ждут проверки` : undefined}
+            icon={<History size={18} strokeWidth={1.75} aria-hidden />}
             onClick={() => setShowAll(true)}
             className="text-ink-secondary hover:text-ink"
           >
             История уроков
-            {waiting > 0 && (
-              <span className="grid h-5 min-w-5 place-items-center rounded-full bg-ink px-1.5 text-caption font-bold text-surface">
-                {waiting}
-              </span>
-            )}
           </Button>
           <Dialog open={showAll} onClose={() => setShowAll(false)} title="История уроков" wide>
             <FullHistory history={history} learnerId={learner.id} />
           </Dialog>
         </>
       )}
+      {inProgress ? (
+        // Live lesson is another product area; for now this opens a placeholder.
+        <Link
+          href={contextHref("/live", learner.id, { lesson: inProgress.lesson.id })}
+          title={inProgress.lesson.title}
+          className={buttonClass("primary")}
+        >
+          Продолжить урок
+        </Link>
+      ) : (
+        latest && (
+          <Link href={contextHref(`/lesson/${latest.id}`, learner.id)} title={latest.title} className={buttonClass("primary")}>
+            Последний урок
+          </Link>
+        )
+      )}
     </div>
   );
-}
-
-function homeworkWord(n: number) {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "домашка";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "домашки";
-  return "домашек";
 }
 
 type HistoryFilter = "all" | HomeworkStatus;

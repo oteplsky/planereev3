@@ -5,8 +5,8 @@ import { CreateTextbookDialog } from "@/components/textbook/CreateTextbookDialog
 import { ConfirmDialog, Dialog, NoticeDialog, PromptDialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui/Toast";
-import { deleteBlockReason, folderPath } from "@/lib/domain";
-import { blockMessages } from "@/lib/messages";
+import { deleteBlockReason, folderPath, lessonHasLearnerActivity } from "@/lib/domain";
+import { blockMessages, KEPT_FOR_LEARNERS } from "@/lib/messages";
 import { useStore } from "@/lib/store";
 import type { AppData, BlockReason } from "@/lib/types";
 
@@ -22,6 +22,14 @@ export type DialogState =
   | { type: "delete"; target: Target }
   | { type: "blocked"; reason: BlockReason; title?: string; description?: string }
   | { type: "move"; target: Target & { kind: "lesson" | "textbook" } };
+
+/** What deleting a material removes, and — when learners worked with it — that their copies stay. */
+function deleteDescription(data: AppData, kind: "lesson" | "textbook", id: string) {
+  const lessonIds = kind === "lesson" ? [id] : data.lessons.filter((l) => l.textbookId === id).map((l) => l.id);
+  const used = lessonIds.some((lessonId) => lessonHasLearnerActivity(data, lessonId));
+  const what = kind === "lesson" ? "Урок исчезнет из библиотеки." : "Учебник исчезнет из библиотеки вместе со всеми уроками.";
+  return `${what} ${used ? KEPT_FOR_LEARNERS : "Это действие нельзя отменить."}`;
+}
 
 /** Delete goes straight to an explanation when it would be refused, instead of a confirm that then fails. */
 export function requestDelete(data: AppData, target: Target): DialogState {
@@ -102,9 +110,7 @@ export function LibraryDialogs({ state, onClose, folderId, onDeleted, onTextbook
             ? undefined
             : state.target.kind === "folder"
               ? "Папка будет удалена, а находящиеся в ней материалы автоматически переместятся в раздел „Библиотека“."
-              : state.target.kind === "textbook"
-                ? "Учебник удалится вместе со всеми уроками. Это действие нельзя отменить."
-                : "Это действие нельзя отменить."
+              : deleteDescription(store.data, state.target.kind, state.target.id)
         }
         confirmLabel={state?.type === "delete" && state.target.kind === "folder" ? "Удалить папку" : "Удалить"}
         onClose={onClose}

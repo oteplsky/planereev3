@@ -15,7 +15,7 @@ import { Progress } from "@/components/ui/Progress";
 import { SearchField } from "@/components/ui/SearchField";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { toast } from "@/components/ui/Toast";
-import { AddTile, FolderCard, MaterialCard } from "./Cards";
+import { AddFolderTile, AddTile, FolderCard, MaterialCard } from "./Cards";
 import { LibraryDialogs, requestDelete, type DialogState } from "./LibraryDialogs";
 import { FiltersButton, MetaFilterBar, metaFilterCount, useMetaFilters } from "./MetaFilterBar";
 import { catalog } from "@/lib/catalog";
@@ -33,10 +33,11 @@ import {
   textbookLessonCount,
   textbookProgress,
   type SourceFilter,
+  lessonTitleFor,
 } from "@/lib/domain";
 import { hasActiveFilters, type MetaFilters } from "@/lib/meta";
-import { count, MATERIALS, TEXTBOOKS } from "@/lib/format";
-import { useStore, useVariant } from "@/lib/store";
+import { count, TEXTBOOKS } from "@/lib/format";
+import { useStore } from "@/lib/store";
 import type { Learner } from "@/lib/types";
 
 type Filter = "all" | "textbooks" | "lessons";
@@ -51,11 +52,11 @@ const kindOption = {
   lesson: { label: "Урок", icon: FileText },
 };
 
-/** Version B: the catalog moved from the top nav into the materials, next to the teacher's own. */
+/** The catalog lives in the materials, next to the teacher's own. */
 type Source = "own" | "catalog";
 const sourceOptions: { value: Source; label: string }[] = [
-  { value: "own", label: "Своё" },
-  { value: "catalog", label: "Каталог" },
+  { value: "own", label: "Мои материалы" },
+  { value: "catalog", label: "Готовые материалы" },
 ];
 
 
@@ -82,7 +83,6 @@ export function Library({ learner, folderId }: LibraryProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [dialog, setDialog] = useState<DialogState>(null);
   const params = useSearchParams();
-  const variant = useVariant();
 
   const editable = learner === null;
   const learnerId = learner?.id ?? null;
@@ -91,7 +91,7 @@ export function Library({ learner, folderId }: LibraryProps) {
   const path = folderPath(data, folder?.id ?? null);
 
   // At the root only: a folder holds the teacher's own materials.
-  const sourceSwitch = variant === "b" && !folder;
+  const sourceSwitch = !folder;
   const source: Source = sourceSwitch && params.get("materials") === "catalog" ? "catalog" : "own";
   const setSource = (next: Source) =>
     router.replace(contextHref("/library", learnerId, { materials: next === "catalog" ? next : null }), { scroll: false });
@@ -112,12 +112,12 @@ export function Library({ learner, folderId }: LibraryProps) {
     setFilter("all");
   };
 
-  // Folders live only at the root and never appear in search results.
-  const folders = !searching && !folder && filter === "all" ? location.folders : [];
+  // Folders live only at the root. They stay put above the search, like a navigation, while it filters the materials.
+  const folders = folder ? [] : location.folders;
   const textbooks = filter === "lessons" ? [] : learnerId ? sortByRecentUse(data, learnerId, results.textbooks) : results.textbooks;
   const lessons = filter === "textbooks" ? [] : results.lessons;
   const isFiltering = searching || filter !== "all";
-  const nothingFound = isFiltering && folders.length + textbooks.length + lessons.length === 0;
+  const nothingFound = isFiltering && textbooks.length + lessons.length === 0;
   const locationEmpty =
     location.folders.length + location.textbooks.length + location.lessons.length === 0;
 
@@ -155,9 +155,31 @@ export function Library({ learner, folderId }: LibraryProps) {
         )}
 
         {/* Inside a folder its name is the title: nothing else on screen says where you are. */}
-        <h2 id="library-heading" className={folder ? (learner ? "text-h2" : "text-h1") : learner ? "text-h2" : "sr-only"}>
+        <h2 id="library-heading" className={folder ? (learner ? "text-h2" : "text-h1") : "sr-only"}>
           {folder ? folder.name : "Библиотека"}
         </h2>
+
+        {(folders.length > 0 || (editable && !folder)) && (
+          <div className={FOLDER_GRID}>
+            {editable && !folder && <AddFolderTile onClick={() => setDialog({ type: "create", kind: "folder" })} />}
+            {folders.map((f) => (
+              <FolderCard
+                key={f.id}
+                href={contextHref("/library", learnerId, { folder: f.id })}
+                name={f.name}
+                itemCount={folderItemCount(data, f.id)}
+                actions={
+                  editable
+                    ? {
+                        onRename: () => setDialog({ type: "rename", target: { kind: "folder", id: f.id, title: f.name } }),
+                        onDelete: () => setDialog(requestDelete(data, { kind: "folder", id: f.id, title: f.name })),
+                      }
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-3">
           <SearchField
@@ -219,33 +241,6 @@ export function Library({ learner, folderId }: LibraryProps) {
         </div>
       ) : (
         <>
-          {(folders.length > 0 || (editable && !isFiltering && !folder)) && (
-            <div>
-              <SectionLabel label="Папки" />
-              <div className={GRID}>
-                {editable && !isFiltering && !folder && (
-                  <AddTile label="Добавить папку" onClick={() => setDialog({ type: "create", kind: "folder" })} />
-                )}
-                {folders.map((f) => (
-                  <FolderCard
-                    key={f.id}
-                    href={contextHref("/library", learnerId, { folder: f.id })}
-                    name={f.name}
-                    caption={count(folderItemCount(data, f.id), MATERIALS)}
-                    actions={
-                      editable
-                        ? {
-                            onRename: () => setDialog({ type: "rename", target: { kind: "folder", id: f.id, title: f.name } }),
-                            onDelete: () => setDialog(requestDelete(data, { kind: "folder", id: f.id, title: f.name })),
-                          }
-                        : undefined
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
           {source === "catalog" ? (
             <div>
               {sourceControl}
@@ -253,7 +248,7 @@ export function Library({ learner, folderId }: LibraryProps) {
             </div>
           ) : (textbooks.length + lessons.length > 0 || (editable && !isFiltering) || sourceSwitch) && (
             <div>
-              {sourceControl || <SectionLabel label={searching ? "Результаты поиска" : "Материалы"} />}
+              {sourceControl || (searching && <SectionLabel label="Результаты поиска" />)}
               <div className={GRID}>
                 {editable && !isFiltering && <AddMaterial onSelect={(kind) => setDialog({ type: "create", kind })} />}
                 {textbooks.map((t) => {
@@ -291,7 +286,7 @@ export function Library({ learner, folderId }: LibraryProps) {
                       key={l.id}
                       href={contextHref(`/lesson/${l.id}`, learnerId)}
                       kind="lesson"
-                      title={l.title}
+                      title={lessonTitleFor(data, l, learnerId)}
                       cover={l.cover}
                       badge={
                         learnerId && (
@@ -352,11 +347,11 @@ function CatalogHint({ query, meta, learnerId, onOpen }: { query: string; meta: 
   if (found.length === 0) return null;
   const label = (
     <>
-      В каталоге: {count(found.length, TEXTBOOKS)}
+      В готовых материалах: {count(found.length, TEXTBOOKS)}
       <ArrowRight size={18} strokeWidth={1.75} aria-hidden />
     </>
   );
-  // Version B: the catalog is the other half of the materials switch, with the same search.
+  // The catalog is the other half of the materials switch, with the same search.
   if (onOpen) {
     return (
       <button type="button" onClick={onOpen} className={`${textButtonClass} -mt-2 self-start`}>
@@ -377,7 +372,7 @@ function CatalogHint({ query, meta, learnerId, onOpen }: { query: string; meta: 
   );
 }
 
-/** Version B, «Каталог»: Planeree's textbooks under the library's own search and filters. */
+/** «Готовые материалы»: Planeree's textbooks under the library's own search and filters. */
 function CatalogMaterials({ query, meta, filter, learnerId }: { query: string; meta: MetaFilters; filter: Filter; learnerId: string | null }) {
   const data = useStore((s) => s.data);
   // The catalog has textbooks only.
@@ -467,6 +462,7 @@ function TypeFilter({ value, onChange }: { value: Filter; onChange: (value: Filt
 }
 
 const GRID = "grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4";
+const FOLDER_GRID = "mb-4 grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3";
 
 export function SectionLabel({ label, count }: { label: string; count?: number }) {
   return (

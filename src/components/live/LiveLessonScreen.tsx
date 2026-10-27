@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { buttonClass } from "@/components/ui/Button";
 import { contextHref, useActiveLearner } from "@/lib/context";
+import { resolveLesson } from "@/lib/domain";
 import { dative, genitive } from "@/lib/learners";
 import { useStore } from "@/lib/store";
 
@@ -15,8 +16,9 @@ import { useStore } from "@/lib/store";
 export function LiveLessonScreen() {
   const learner = useActiveLearner();
   const lessonId = useSearchParams().get("lesson");
-  const lesson = useStore((s) => s.data.lessons.find((l) => l.id === lessonId) ?? null);
   const learnerId = learner?.id ?? null;
+  const data = useStore((s) => s.data);
+  const lesson = lessonId ? (resolveLesson(data, lessonId, learnerId)?.lesson ?? null) : null;
   const backHref = contextHref("/library", learnerId);
 
   return (

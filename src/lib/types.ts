@@ -109,6 +109,11 @@ export interface LearnerLesson {
   id: string;
   learnerId: string;
   sourceLessonId: string;
+  /**
+   * The learner's own title: set when adapted, or kept from the original when it is deleted from the library.
+   * Null = follows the original.
+   */
+  title: string | null;
   content: MockLessonContent;
   createdAt: string;
   updatedAt: string;
@@ -154,9 +159,7 @@ export interface AppData {
 }
 
 /** Why a requested change was refused. The UI maps these to Russian messages. */
-export type BlockReason =
-  | "has_learner_activity"
-  | "not_found";
+export type BlockReason = "not_found";
 
 export type Result<T = AppData> =
   | { ok: true; data: T }

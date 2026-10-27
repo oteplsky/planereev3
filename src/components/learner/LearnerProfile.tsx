@@ -16,21 +16,22 @@ import type { Learner } from "@/lib/types";
  * control — so «Начать индивидуальный урок» reads unambiguously. Group chips open the group,
  * where lessons are for the whole group. Group membership never hides the individual context.
  */
+/** Neutral, quiet tag: says how someone studies without competing with the actions. */
+export const quietChip = "inline-flex h-6 items-center rounded-full border border-line px-2.5 text-caption text-ink-secondary";
+
 export function FormatChips({ learner }: { learner: Learner }) {
   const data = useStore((s) => s.data);
   const groups = groupsOf(data, learner.id);
-  const chip = "inline-flex h-7 items-center gap-1 rounded-full border px-3 text-caption font-semibold";
   return (
     <span className="flex flex-wrap gap-1.5">
-      <span aria-current="page" className={`${chip} border-action bg-selected pl-2 text-action`}>
-        <Check size={14} strokeWidth={2.5} aria-hidden />
+      <span aria-current="page" className={quietChip}>
         Индивидуально
       </span>
       {groups.map((g) => (
         <Link
           key={g.id}
           href={contextHref("/library", g.id)}
-          className={`${chip} border-line bg-surface text-ink transition-colors duration-[120ms] hover:border-line-strong hover:bg-hover`}
+          className={`${quietChip} transition-colors duration-[120ms] hover:border-line-strong hover:text-ink`}
         >
           {g.name}
         </Link>

@@ -37,18 +37,21 @@ export function BlockView({ block, adaptedLabel }: { block: LessonBlock; adapted
 
 interface BlockEditorProps {
   initial: LessonBlock[];
+  /** The lesson title, edited together with the blocks. */
+  initialTitle: string;
   /** Explains whose material is being edited (spec §11.4). */
   banner: React.ReactNode;
   saveLabel: string;
-  onSave: (blocks: LessonBlock[]) => void;
+  onSave: (blocks: LessonBlock[], title: string) => void;
   onCancel: () => void;
 }
 
 /** Minimal mock-content editor: edit titles and text, add or remove blocks. Not a lesson constructor. */
-export function BlockEditor({ initial, banner, saveLabel, onSave, onCancel }: BlockEditorProps) {
+export function BlockEditor({ initial, initialTitle, banner, saveLabel, onSave, onCancel }: BlockEditorProps) {
   const [draft, setDraft] = useState<LessonBlock[]>(() => structuredClone(initial));
+  const [title, setTitle] = useState(initialTitle);
   const [focusId, setFocusId] = useState<string | null>(null);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
+  const dirty = title.trim() !== initialTitle || JSON.stringify(draft) !== JSON.stringify(initial);
 
   // Warn before closing the tab with unsaved edits.
   useEffect(() => {
@@ -68,11 +71,23 @@ export function BlockEditor({ initial, banner, saveLabel, onSave, onCancel }: Bl
   };
 
   const save = () =>
-    onSave(draft.map((b) => ({ ...b, title: b.title.trim() || "Без названия", content: b.content.trim() })));
+    onSave(
+      draft.map((b) => ({ ...b, title: b.title.trim() || "Без названия", content: b.content.trim() })),
+      title.trim() || initialTitle,
+    );
 
   return (
     <div className="flex flex-col gap-4">
       {banner}
+
+      <label className="block">
+        <span className="mb-1.5 block text-caption font-semibold text-ink-secondary">Название урока</span>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="h-12 w-full rounded-sm border border-line-strong bg-surface px-3 text-h3 text-ink outline-none transition-colors focus:border-action"
+        />
+      </label>
 
       {draft.map((block) => (
         <EditableBlock

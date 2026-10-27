@@ -6,6 +6,8 @@ const sizes = {
   sm: { box: "size-8", text: "text-caption font-bold", badge: "size-4 -right-0.5 -bottom-0.5", icon: 10 },
   md: { box: "size-10", text: "text-caption font-bold", badge: "size-5 -right-1 -bottom-1", icon: 12 },
   lg: { box: "size-12", text: "text-body font-bold", badge: "size-5 -right-1 -bottom-1", icon: 12 },
+  /** The learner selector: 15% smaller than xl. */
+  selector: { box: "size-12", text: "text-body-lg font-semibold", badge: "size-5 -right-1 -bottom-1", icon: 12 },
   xl: { box: "size-14", text: "text-h3", badge: "size-6 -right-1 -bottom-1", icon: 14 },
   profile: { box: "size-24", text: "text-h1", badge: "size-7 right-0 bottom-0", icon: 16 },
 } as const;

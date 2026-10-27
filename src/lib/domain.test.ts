@@ -241,14 +241,33 @@ describe("library management", () => {
     expect(data.folders.some((f) => f.id === created.folderId)).toBe(false);
   });
 
-  it("blocks deleting materials that learner history depends on", () => {
-    const data = createDemoData();
-    expect(d.deleteLesson(data, PS)).toEqual({ ok: false, reason: "has_learner_activity" });
-    expect(d.deleteTextbook(data, "tb_ef_elementary").ok).toBe(false);
-    expect(d.deleteSection(data, "tb_ef_elementary", "sec_efe_1", T1).ok).toBe(false);
-    expect(d.deleteLesson(data, "les_weather").ok).toBe(true);
-    const unused = d.createTextbook(data, NEW_TEXTBOOK, null, T1);
-    expect(d.deleteTextbook(unused.data, unused.textbookId).ok).toBe(true);
+  it("deletes materials learners worked with, keeping their copies under the title they knew", () => {
+    const before = createDemoData();
+    const title = before.lessons.find((l) => l.id === PS)!.title;
+    const r = d.deleteLesson(before, PS);
+    expect(r.ok).toBe(true);
+    const data = r.ok ? r.data : before;
+    expect(data.lessons.some((l) => l.id === PS)).toBe(false);
+    expect(d.resolveLesson(data, PS, null)).toBeNull();
+    const anna = d.resolveLesson(data, PS, "anna")!;
+    expect(anna.lesson.title).toBe(title);
+    expect(anna.content.blocks.length).toBeGreaterThan(0);
+    expect(d.getLessonHistory(data, "anna").some((h) => h.lesson.id === PS && h.lesson.title === title)).toBe(true);
+    expect(d.deleteTextbook(before, "tb_ef_elementary").ok).toBe(true);
+    expect(d.deleteSection(before, "tb_ef_elementary", "sec_efe_1", T1).ok).toBe(true);
+  });
+
+  it("an adapted title stays the learner's, and the original's title brings it back to following", () => {
+    let data = createDemoData();
+    const content = d.resolveLesson(data, PS, "anna")!.content;
+    data = d.updateLearnerLessonContent(data, "anna", PS, content, T1, "Present Simple для Анны");
+    expect(d.resolveLesson(data, PS, "anna")!.lesson.title).toBe("Present Simple для Анны");
+    const original = d.resolveLesson(data, PS, null)!.lesson;
+    expect(original.title).not.toBe("Present Simple для Анны");
+    expect(d.lessonTitleFor(data, original, "anna")).toBe("Present Simple для Анны");
+    expect(d.lessonTitleFor(data, original, "maxim")).toBe(original.title);
+    data = d.updateLearnerLessonContent(data, "anna", PS, content, T2, original.title);
+    expect(d.findLearnerLesson(data, "anna", PS)!.title).toBeNull();
   });
 
   it("deleting a section removes its lessons", () => {
@@ -325,8 +344,8 @@ describe("library queries", () => {
   it("explains a blocked delete without changing data", () => {
     const data = createDemoData();
     expect(d.deleteBlockReason(data, "folder", "fld_publishers")).toBeNull();
-    expect(d.deleteBlockReason(data, "lesson", PS)).toBe("has_learner_activity");
-    expect(d.deleteBlockReason(data, "lesson", "les_weather")).toBeNull();
+    expect(d.deleteBlockReason(data, "lesson", PS)).toBeNull();
+    expect(d.deleteBlockReason(data, "lesson", "nobody")).toBe("not_found");
   });
 });
 
@@ -502,26 +521,6 @@ describe("library filters", () => {
   });
 });
 
-describe("groups", () => {
-  it("adds students to a group, skipping existing members and non-students", () => {
-    const data = d.addGroupMembers(createDemoData(), "group_a2", ["anna", "irina", "group_b1", "nobody"]);
-    const group = data.learners.find((l) => l.id === "group_a2")!;
-    expect(group.memberIds).toEqual(["irina", "timur", "vera", "artem", "anna"]);
-    expect(groupsOf(data, "anna").map((g) => g.id)).toEqual(["group_a2"]);
-  });
-});
-
-describe("removing from a group", () => {
-  it("removes only the membership", () => {
-    const before = createDemoData();
-    const data = d.removeGroupMember(before, "group_b1", "kseniya");
-    expect(data.learners.find((l) => l.id === "group_b1")!.memberIds).not.toContain("kseniya");
-    expect(groupsOf(data, "kseniya")).toEqual([]);
-    expect(data.learners).toHaveLength(before.learners.length);
-    expect(d.removeGroupMember(data, "group_b1", "kseniya")).toBe(data);
-  });
-});
-
 describe("demo data integrity", () => {
   const data = createDemoData();
 
@@ -670,27 +669,15 @@ describe("textbook progress for a learner", () => {
     expect(d.learnerTextbooks(fresh(), "liza")).toHaveLength(0);
   });
 
-  it("counts finished lessons and suggests the one after the furthest taught", () => {
+  it("counts finished lessons", () => {
     let data = teach(fresh(), "les_introductions", T1);
     data = teach(data, "les_present_simple", T2);
     expect(progress(data)).toMatchObject({ total: 5, completed: 2 });
-    expect(progress(data)!.next?.id).toBe("les_daily_routines");
   });
 
-  it("does not go back to lessons skipped earlier", () => {
-    const data = teach(fresh(), "les_past_simple", T1);
-    expect(progress(data)!.next?.id).toBe("les_my_weekend");
-  });
-
-  it("a lesson in progress counts as reached but not finished", () => {
+  it("a lesson in progress is not counted as finished", () => {
     const data = teach(fresh(), "les_introductions", T1, false);
     expect(progress(data)).toMatchObject({ completed: 0 });
-    expect(progress(data)!.next?.id).toBe("les_present_simple");
-  });
-
-  it("nothing is next after the last lesson", () => {
-    const data = teach(fresh(), "les_my_weekend", T1);
-    expect(progress(data)!.next).toBeNull();
   });
 
   it("lists the learner's textbooks, most recently active first", () => {

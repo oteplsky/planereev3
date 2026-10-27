@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { forwardRef, type ButtonHTMLAttributes } from "react";
-import { Copy, Ellipsis, FileText, FolderInput, Pencil, Plus, Trash2 } from "lucide-react";
+import { Copy, Ellipsis, FileText, Folder, FolderInput, FolderPlus, Pencil, Plus, Trash2 } from "lucide-react";
 import { IconButton } from "@/components/ui/Button";
 import { Menu, type MenuItem } from "@/components/ui/Menu";
 import { Cover, StackPages } from "./Cover";
@@ -51,27 +51,46 @@ export function ActionsMenu({ title, actions }: { title: string; actions: CardAc
 interface FolderCardProps {
   href: string;
   name: string;
-  caption: string;
+  /** Materials inside, shown as a quiet number. */
+  itemCount: number;
   /** Omitted in learner context: folders are managed from the global library. */
   actions?: CardActions;
 }
 
-/** Folder with a tab, on the brand "light" surface (screenshot reference). */
-export function FolderCard({ href, name, caption, actions }: FolderCardProps) {
+const FOLDER_ROW = "h-12 rounded-md border px-3 transition-colors duration-[120ms]";
+
+/** One-line folder row: icon, name, count. The menu shows on hover, always on touch screens. */
+export function FolderCard({ href, name, itemCount, actions }: FolderCardProps) {
   return (
-    <div className="group relative pt-3">
-      <span className="absolute top-0 left-0 h-4 w-24 rounded-t-md bg-light transition-colors duration-[120ms] group-hover:bg-light-hover" />
-      <div className="relative flex min-h-28 items-start justify-between gap-2 rounded-lg rounded-tl-none bg-light p-5 transition-colors duration-[120ms] group-hover:bg-light-hover">
-        <div className="min-w-0">
-          {/* Stretched link: the whole card opens the folder; the menu stays a separate control. */}
-          <Link href={href} className="line-clamp-2 text-body-lg font-bold after:absolute after:inset-0 after:-top-3 after:rounded-lg">
-            {name}
-          </Link>
-          <p className="mt-1 text-body text-ink-secondary">{caption}</p>
+    <div className={`group relative flex items-center gap-3 border-line bg-surface hover:border-line-strong ${FOLDER_ROW}`}>
+      <Folder size={20} strokeWidth={1.75} className="shrink-0 text-ink-secondary group-hover:text-action" aria-hidden />
+      {/* Stretched link: the whole row opens the folder; the menu stays a separate control. */}
+      <Link href={href} title={name} className="min-w-0 flex-1 truncate font-semibold after:absolute after:inset-0 after:rounded-md">
+        {name}
+      </Link>
+      <span className={`text-caption text-ink-secondary tabular-nums ${actions ? "group-focus-within:hidden group-hover:hidden [@media(hover:none)]:hidden" : ""}`}>
+        {itemCount}
+      </span>
+      {actions && (
+        <div className="-mr-1.5 hidden group-focus-within:block group-hover:block [@media(hover:none)]:block">
+          <ActionsMenu title={name} actions={actions} />
         </div>
-        {actions && <ActionsMenu title={name} actions={actions} />}
-      </div>
+      )}
     </div>
+  );
+}
+
+/** Quiet «Новая папка» row before the folders, the same height as them — like «Добавить материал» before the materials. */
+export function AddFolderTile({ onClick }: { onClick(): void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-3 border-dashed border-line-strong font-semibold text-ink-secondary hover:border-action hover:bg-selected hover:text-action ${FOLDER_ROW}`}
+    >
+      <FolderPlus size={20} strokeWidth={1.75} aria-hidden />
+      Новая папка
+    </button>
   );
 }
 

@@ -417,6 +417,7 @@ function learnerCopy(
     id,
     learnerId,
     sourceLessonId: lessonId,
+    title: null,
     content: { blocks: structuredClone(blocks ?? lessonById(lessonId).content.blocks) },
     createdAt,
     updatedAt: createdAt,
