@@ -5,6 +5,7 @@ import { CreateTextbookDialog } from "@/components/textbook/CreateTextbookDialog
 import { ConfirmDialog, Dialog, NoticeDialog, PromptDialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui/Toast";
+import { ShareDialog } from "./ShareDialog";
 import { deleteBlockReason, folderPath, lessonHasLearnerActivity } from "@/lib/domain";
 import { blockMessages, KEPT_FOR_LEARNERS } from "@/lib/messages";
 import { useStore } from "@/lib/store";
@@ -21,7 +22,8 @@ export type DialogState =
   | { type: "rename"; target: Target }
   | { type: "delete"; target: Target }
   | { type: "blocked"; reason: BlockReason; title?: string; description?: string }
-  | { type: "move"; target: Target & { kind: "lesson" | "textbook" } };
+  | { type: "move"; target: Target & { kind: "lesson" | "textbook" } }
+  | { type: "share"; target: Target & { kind: "lesson" | "textbook" } };
 
 /** What deleting a material removes, and — when learners worked with it — that their copies stay. */
 function deleteDescription(data: AppData, kind: "lesson" | "textbook", id: string) {
@@ -133,6 +135,8 @@ export function LibraryDialogs({ state, onClose, folderId, onDeleted, onTextbook
       />
 
       <MoveDialog state={state} onClose={onClose} />
+
+      <ShareDialog open={state?.type === "share"} onClose={onClose} target={state?.type === "share" ? state.target : null} />
     </>
   );
 }

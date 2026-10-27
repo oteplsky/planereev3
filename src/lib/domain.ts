@@ -521,7 +521,8 @@ export function materialMeta(data: Materials, item: Textbook | Lesson): Material
 
 /** Who made a material; null = the teacher. Textbook lessons inherit their textbook's author. */
 export function materialAuthor(data: Materials, item: Textbook | Lesson): Author | null {
-  if ("author" in item) return item.author;
+  if ("meta" in item) return item.author;
+  if (item.textbookId === null) return item.author ?? null;
   return data.textbooks.find((t) => t.id === item.textbookId)?.author ?? null;
 }
 
@@ -536,7 +537,10 @@ export function matchesSource(author: Author | null, source: SourceFilter): bool
 /** Authors other than the teacher whose materials are in the library, by name. */
 export function libraryAuthors(data: Materials): Author[] {
   const byId = new Map<string, Author>();
-  for (const t of data.textbooks) if (t.author) byId.set(t.author.id, t.author);
+  for (const item of [...data.textbooks, ...data.lessons]) {
+    const author = "meta" in item || item.textbookId === null ? item.author : null;
+    if (author) byId.set(author.id, author);
+  }
   return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, "ru"));
 }
 
@@ -576,7 +580,7 @@ export function filterLevelOptions(data: Materials, filters: MetaFilters): Level
 
 /** Saved data from earlier prototype versions, brought up to the current metadata options. */
 export function migrateData(data: AppData): AppData {
-  return {
+  const migrated: AppData = {
     ...data,
     learnerLessons: data.learnerLessons.map((ll) => ({ ...ll, title: ll.title ?? null })),
     textbooks: data.textbooks.map((t) => ({
@@ -586,20 +590,60 @@ export function migrateData(data: AppData): AppData {
       catalogSourceId: t.catalogSourceId ?? null,
     })),
   };
+  // Saved before the library had its own order: the order it shows now is kept, so editing doesn't reshuffle it.
+  return [null, ...data.folders.map((f) => f.id)].reduce(
+    (acc, folderId) =>
+      reorderMaterials(acc, libraryLocation(acc, folderId).materials.map((m) => ({ kind: m.kind, id: m.item.id }))),
+    migrated,
+  );
 }
 
-/** What one library location contains. Textbook lessons are not listed here. */
+export type LibraryItem = { kind: "textbook"; item: Textbook } | { kind: "lesson"; item: Lesson };
+
+/**
+ * What one library location contains. Textbook lessons are not listed here.
+ * Materials are in the teacher's order: new ones go first, and dragging sets the order.
+ * Materials that were never placed come after the placed ones, newest first.
+ */
 export function libraryLocation(data: AppData, folderId: string | null) {
-  const byTitle = (a: { title: string }, b: { title: string }) => a.title.localeCompare(b.title, "ru");
+  const textbooks = data.textbooks.filter((t) => t.folderId === folderId);
+  const lessons = data.lessons.filter((l) => l.textbookId === null && l.folderId === folderId);
+  const materials: LibraryItem[] = [
+    ...textbooks.map((item) => ({ kind: "textbook" as const, item })),
+    ...lessons.map((item) => ({ kind: "lesson" as const, item })),
+  ].sort(
+    (a, b) =>
+      (a.item.position ?? Infinity) - (b.item.position ?? Infinity) ||
+      b.item.updatedAt.localeCompare(a.item.updatedAt) ||
+      a.item.title.localeCompare(b.item.title, "ru"),
+  );
   return {
     folders: data.folders
       .filter((f) => f.parentFolderId === folderId)
       .sort((a, b) => a.name.localeCompare(b.name, "ru")),
-    textbooks: data.textbooks.filter((t) => t.folderId === folderId).sort(byTitle),
-    lessons: data.lessons
-      .filter((l) => l.textbookId === null && l.folderId === folderId)
-      .sort(byTitle),
+    materials,
+    textbooks: materials.flatMap((m) => (m.kind === "textbook" ? [m.item] : [])),
+    lessons: materials.flatMap((m) => (m.kind === "lesson" ? [m.item] : [])),
   };
+}
+
+/** A position before everything in the location: where new and newly moved materials go. */
+function firstPosition(data: AppData, folderId: string | null): number {
+  const { materials } = libraryLocation(data, folderId);
+  return Math.min(0, ...materials.map((m) => m.item.position ?? 0)) - 1;
+}
+
+/** Drag and drop in the library: the location's materials in their new order. */
+export function reorderMaterials(
+  data: AppData,
+  order: { kind: "lesson" | "textbook"; id: string }[],
+): AppData {
+  const next = clone(data);
+  order.forEach(({ kind, id }, position) => {
+    const item = kind === "lesson" ? next.lessons.find((l) => l.id === id) : next.textbooks.find((t) => t.id === id);
+    if (item) item.position = position;
+  });
+  return next;
 }
 
 // ───────────────────────── Materials (spec §5.4–5.5) ─────────────────────────
@@ -632,6 +676,7 @@ export function createTextbook(
     coverImage: null,
     author: null,
     catalogSourceId: null,
+    position: firstPosition(next, folderId),
     updatedAt: now,
   });
   return { data: next, textbookId };
@@ -719,6 +764,7 @@ export function createLesson(
       blocks: [newBlock("text", "Введение", "Здесь появится содержание урока.")],
     },
     cover: null,
+    position: placement.textbookId ? undefined : firstPosition(next, placement.folderId ?? null),
     updatedAt: now,
   });
   if (placement.textbookId) {
@@ -759,6 +805,7 @@ export function moveMaterial(
       ? next.lessons.find((l) => l.id === id && l.textbookId === null)
       : next.textbooks.find((t) => t.id === id);
   if (!item) return data;
+  if (item.folderId !== folderId) item.position = firstPosition(next, folderId);
   item.folderId = folderId;
   return next;
 }
@@ -797,6 +844,7 @@ export function duplicateLesson(
     id: newId,
     title: copyTitle(source.title),
     content: { blocks: source.content.blocks.map((b) => ({ ...b, id: makeId("blk") })) },
+    position: source.textbookId ? undefined : firstPosition(next, source.folderId),
     updatedAt: now,
   });
   if (source.textbookId) {
@@ -818,7 +866,13 @@ export function duplicateTextbook(
   const source = data.textbooks.find((t) => t.id === textbookId);
   if (!source) return { data, textbookId };
   const next = clone(data);
-  const newTbId = copyTextbookInto(next, data, source, { title: copyTitle(source.title) }, now);
+  const newTbId = copyTextbookInto(
+    next,
+    data,
+    source,
+    { title: copyTitle(source.title), position: firstPosition(next, source.folderId) },
+    now,
+  );
   return { data: next, textbookId: newTbId };
 }
 
@@ -835,8 +889,82 @@ export function addTextbookFromCatalog(
   const source = catalog.textbooks.find((t) => t.id === catalogTextbookId);
   if (!source) return { data, textbookId: null };
   const next = clone(data);
-  const textbookId = copyTextbookInto(next, catalog, source, { folderId: null, catalogSourceId: source.id }, now);
+  const textbookId = copyTextbookInto(next, catalog, source, { folderId: null, catalogSourceId: source.id, position: firstPosition(next, null) }, now);
   return { data: next, textbookId };
+}
+
+/** Who made a textbook, as someone it was shared with sees it: the sender, unless they took it from someone else. */
+export function sharedAuthor(data: AppData, textbook: Textbook): Author {
+  return textbook.author ?? { id: data.teacher.id, name: data.teacher.name };
+}
+
+/**
+ * «Сохранить себе» on a shared textbook: the recipient gets their own copy at the library root,
+ * credited to whoever made the original. Later changes to the original never reach it.
+ */
+export function saveSharedTextbook(
+  data: AppData,
+  textbookId: string,
+  now: string,
+): { data: AppData; textbookId: string | null } {
+  const source = data.textbooks.find((t) => t.id === textbookId);
+  if (!source) return { data, textbookId: null };
+  const next = clone(data);
+  const copyId = copyTextbookInto(
+    next,
+    data,
+    source,
+    {
+      folderId: null,
+      author: sharedAuthor(data, source),
+      sharedSourceId: source.id,
+      position: firstPosition(next, null),
+    },
+    now,
+  );
+  return { data: next, textbookId: copyId };
+}
+
+/** Who made a lesson, as someone it was shared with sees it. */
+export function sharedLessonAuthor(data: AppData, lesson: Lesson): Author {
+  return materialAuthor(data, lesson) ?? { id: data.teacher.id, name: data.teacher.name };
+}
+
+/**
+ * «Сохранить себе» on a shared lesson: a standalone copy at the top of the library root, even when the
+ * original sits in a textbook. Credited to whoever made the original; independent of it.
+ */
+export function saveSharedLesson(
+  data: AppData,
+  lessonId: string,
+  now: string,
+): { data: AppData; lessonId: string | null } {
+  const source = data.lessons.find((l) => l.id === lessonId);
+  if (!source) return { data, lessonId: null };
+  const next = clone(data);
+  const copyId = makeId("les");
+  next.lessons.push({
+    ...clone(source),
+    id: copyId,
+    textbookId: null,
+    folderId: null,
+    content: { blocks: source.content.blocks.map((b) => ({ ...b, id: makeId("blk") })) },
+    author: sharedLessonAuthor(data, source),
+    sharedSourceId: source.id,
+    position: firstPosition(next, null),
+    updatedAt: now,
+  });
+  return { data: next, lessonId: copyId };
+}
+
+/** The recipient's saved copy of a shared lesson, if they have saved it. */
+export function lessonFromShare(data: AppData, sharedLessonId: string): Lesson | undefined {
+  return data.lessons.find((l) => l.sharedSourceId === sharedLessonId);
+}
+
+/** The recipient's saved copy of a shared textbook, if they have saved it. */
+export function textbookFromShare(data: AppData, sharedTextbookId: string): Textbook | undefined {
+  return data.textbooks.find((t) => t.sharedSourceId === sharedTextbookId);
 }
 
 /** The teacher's copy of a catalog textbook, if they have added it. */
@@ -1093,6 +1221,7 @@ export function removeLessonFromTextbook(
   detachFromTextbooks(next, lessonId);
   lesson.textbookId = null;
   lesson.folderId = null;
+  lesson.position = firstPosition(next, null);
   lesson.updatedAt = now;
   if (tb) tb.updatedAt = now;
   return next;
@@ -1107,4 +1236,16 @@ export function textbookLessons(data: Materials, textbook: Textbook) {
       .map((s) => ({ section: s, lessons: s.lessonIds.map(byId).filter((l) => !!l) })),
     loose: textbook.looseLessonIds.map(byId).filter((l) => !!l),
   };
+}
+
+/**
+ * Lesson numbers as shown in the textbook: 1, 2, 3… without sections; 1.1, 1.2, 2.1… with them,
+ * counted within each section.
+ */
+export function lessonNumbers(data: Materials, textbook: Textbook): Map<string, string> {
+  const { sections, loose } = textbookLessons(data, textbook);
+  const entries = textbook.useSections
+    ? sections.flatMap((s, si) => s.lessons.map((l, li) => [l.id, `${si + 1}.${li + 1}`] as const))
+    : loose.map((l, i) => [l.id, `${i + 1}`] as const);
+  return new Map(entries);
 }

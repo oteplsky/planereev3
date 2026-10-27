@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useState, type DragEvent } from "react";
 import { ArrowRight, BookOpen, Check, FileText, FolderOpen, FolderOutput, SearchX } from "lucide-react";
 import { InLibraryChip } from "@/components/catalog/AddToLibrary";
-import { LessonStatusChips } from "@/components/ui/Badge";
+import { LessonStatusText } from "@/components/ui/Badge";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Button, textButtonClass } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -15,7 +15,7 @@ import { Progress } from "@/components/ui/Progress";
 import { SearchField } from "@/components/ui/SearchField";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { toast } from "@/components/ui/Toast";
-import { AddFolderTile, AddTile, FolderCard, MaterialCard } from "./Cards";
+import { AddFolderTile, AddTile, FolderCard, MaterialCard, type ReorderHandlers } from "./Cards";
 import { LibraryDialogs, requestDelete, type DialogState } from "./LibraryDialogs";
 import { FiltersButton, MetaFilterBar, metaFilterCount, useMetaFilters } from "./MetaFilterBar";
 import { catalog } from "@/lib/catalog";
@@ -32,6 +32,7 @@ import {
   textbookFromCatalog,
   textbookLessonCount,
   textbookProgress,
+  type LibraryItem,
   type SourceFilter,
   lessonTitleFor,
 } from "@/lib/domain";
@@ -75,6 +76,7 @@ export function Library({ learner, folderId }: LibraryProps) {
   const data = useStore((s) => s.data);
   const duplicateMaterial = useStore((s) => s.duplicateMaterial);
   const moveMaterial = useStore((s) => s.moveMaterial);
+  const reorderMaterials = useStore((s) => s.reorderMaterials);
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -82,6 +84,8 @@ export function Library({ learner, folderId }: LibraryProps) {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [dialog, setDialog] = useState<DialogState>(null);
+  /** While dragging: the dragged card and the order it would land in. */
+  const [drag, setDrag] = useState<{ id: string; order: LibraryItem[] } | null>(null);
   const params = useSearchParams();
 
   const editable = learner === null;
@@ -117,6 +121,14 @@ export function Library({ learner, folderId }: LibraryProps) {
   const textbooks = filter === "lessons" ? [] : learnerId ? sortByRecentUse(data, learnerId, results.textbooks) : results.textbooks;
   const lessons = filter === "textbooks" ? [] : results.lessons;
   const isFiltering = searching || filter !== "all";
+  // The teacher's own order, in which materials can be dragged. Search and the learner context list textbooks first.
+  const reorderable = editable && !isFiltering;
+  const materials: LibraryItem[] = reorderable
+    ? (drag?.order ?? location.materials)
+    : [
+        ...textbooks.map((item) => ({ kind: "textbook" as const, item })),
+        ...lessons.map((item) => ({ kind: "lesson" as const, item })),
+      ];
   const nothingFound = isFiltering && textbooks.length + lessons.length === 0;
   const locationEmpty =
     location.folders.length + location.textbooks.length + location.lessons.length === 0;
@@ -139,6 +151,90 @@ export function Library({ learner, folderId }: LibraryProps) {
   const duplicate = (kind: "lesson" | "textbook", id: string) => {
     duplicateMaterial(kind, id);
     toast(kind === "lesson" ? "Копия урока создана" : "Копия учебника создана");
+  };
+
+  const dragHandlers = (key: string): ReorderHandlers => ({
+    dragging: drag?.id === key,
+    onDragStart: (e: DragEvent) => {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", key);
+      // Changing the DOM inside dragstart can cancel the drag in Chromium.
+      requestAnimationFrame(() => setDrag({ id: key, order: location.materials }));
+    },
+    onDragEnd: () => setDrag(null),
+    // The dragged card takes the hovered card's place, so the grid shows where it will land.
+    onDragOver: (e: DragEvent) => {
+      if (!drag) return;
+      e.preventDefault();
+      if (key === drag.id) return;
+      const order = drag.order.filter((m) => m.item.id !== drag.id);
+      const to = drag.order.findIndex((m) => m.item.id === key);
+      order.splice(to, 0, drag.order.find((m) => m.item.id === drag.id)!);
+      setDrag({ ...drag, order });
+    },
+  });
+
+  /** The whole grid takes the drop, gaps between cards included. */
+  const gridDrop = drag && {
+    onDragOver: (e: DragEvent) => e.preventDefault(),
+    onDrop: (e: DragEvent) => {
+      e.preventDefault();
+      reorderMaterials(drag.order.map((m) => ({ kind: m.kind, id: m.item.id })));
+      setDrag(null);
+    },
+  };
+
+  const renderMaterial = ({ kind, item }: LibraryItem) => {
+    const target = { kind, id: item.id, title: item.title };
+    const actions = editable
+      ? {
+          onRename: () => setDialog({ type: "rename", target }),
+          onShare: () => setDialog({ type: "share", target }),
+          onDuplicate: () => duplicate(kind, item.id),
+          onMove: () => setDialog({ type: "move", target }),
+          extra: removeFromFolder(kind, item),
+          onDelete: () => setDialog(requestDelete(data, target)),
+        }
+      : undefined;
+    const reorder = reorderable ? dragHandlers(item.id) : undefined;
+    if (kind === "textbook") {
+      const progress = learnerId ? textbookProgress(data, learnerId, item) : null;
+      return (
+        <MaterialCard
+          key={item.id}
+          href={contextHref(`/textbook/${item.id}`, learnerId)}
+          kind="textbook"
+          title={item.title}
+          caption={item.author?.name}
+          lessonCount={textbookLessonCount(item)}
+          badge={progress && <Progress value={progress.completed} total={progress.total} />}
+          cover={item.cover}
+          coverImage={item.coverImage}
+          actions={actions}
+          reorder={reorder}
+        />
+      );
+    }
+    return (
+      <MaterialCard
+        key={item.id}
+        href={contextHref(`/lesson/${item.id}`, learnerId)}
+        kind="lesson"
+        title={lessonTitleFor(data, item, learnerId)}
+        caption={item.author?.name}
+        cover={item.cover}
+        badge={
+          learnerId && (
+            <LessonStatusText
+              lesson={lessonStatusForLearner(data, learnerId, item.id)}
+              homework={homeworkStatusForLearner(data, learnerId, item.id)}
+            />
+          )
+        }
+        actions={actions}
+        reorder={reorder}
+      />
+    );
   };
 
   return (
@@ -249,67 +345,9 @@ export function Library({ learner, folderId }: LibraryProps) {
           ) : (textbooks.length + lessons.length > 0 || (editable && !isFiltering) || sourceSwitch) && (
             <div>
               {sourceControl || (searching && <SectionLabel label="Результаты поиска" />)}
-              <div className={GRID}>
+              <div className={GRID} {...gridDrop}>
                 {editable && !isFiltering && <AddMaterial onSelect={(kind) => setDialog({ type: "create", kind })} />}
-                {textbooks.map((t) => {
-                  const target = { kind: "textbook" as const, id: t.id, title: t.title };
-                  const progress = learnerId ? textbookProgress(data, learnerId, t) : null;
-                  return (
-                    <MaterialCard
-                      key={t.id}
-                      href={contextHref(`/textbook/${t.id}`, learnerId)}
-                      kind="textbook"
-                      title={t.title}
-                      caption={t.author?.name}
-                      lessonCount={textbookLessonCount(t)}
-                      badge={progress && <Progress value={progress.completed} total={progress.total} />}
-                      cover={t.cover}
-                      coverImage={t.coverImage}
-                      actions={
-                        editable
-                          ? {
-                              onRename: () => setDialog({ type: "rename", target }),
-                              onDuplicate: () => duplicate("textbook", t.id),
-                              onMove: () => setDialog({ type: "move", target }),
-                              extra: removeFromFolder("textbook", t),
-                              onDelete: () => setDialog(requestDelete(data, target)),
-                            }
-                          : undefined
-                      }
-                    />
-                  );
-                })}
-                {lessons.map((l) => {
-                  const target = { kind: "lesson" as const, id: l.id, title: l.title };
-                  return (
-                    <MaterialCard
-                      key={l.id}
-                      href={contextHref(`/lesson/${l.id}`, learnerId)}
-                      kind="lesson"
-                      title={lessonTitleFor(data, l, learnerId)}
-                      cover={l.cover}
-                      badge={
-                        learnerId && (
-                          <LessonStatusChips
-                            lesson={lessonStatusForLearner(data, learnerId, l.id)}
-                            homework={homeworkStatusForLearner(data, learnerId, l.id)}
-                          />
-                        )
-                      }
-                      actions={
-                        editable
-                          ? {
-                              onRename: () => setDialog({ type: "rename", target }),
-                              onDuplicate: () => duplicate("lesson", l.id),
-                              onMove: () => setDialog({ type: "move", target }),
-                              extra: removeFromFolder("lesson", l),
-                              onDelete: () => setDialog(requestDelete(data, target)),
-                            }
-                          : undefined
-                      }
-                    />
-                  );
-                })}
+                {materials.map(renderMaterial)}
               </div>
             </div>
           )}

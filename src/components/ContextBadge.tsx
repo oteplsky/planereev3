@@ -4,33 +4,22 @@ import { forLearner } from "@/lib/learners";
 import type { Learner } from "@/lib/types";
 
 /**
- * Says whose material is on screen (spec §3.4, §16.4): the shared library or a
- * specific learner. Shown on textbook and lesson screens.
+ * Says whose material is on screen (spec §3.4, §16.4): the shared library or a specific learner.
+ * Quiet text at the start of the lesson's status line; the learner's avatar is the one mark of colour.
  */
-export function ContextBadge({
-  learner,
-  globalLabel = "Общий материал",
-  learnerLabel,
-}: {
-  learner: Learner | null;
-  globalLabel?: string;
-  /** Defaults to «Версия для Анны». */
-  learnerLabel?: string;
-}) {
+export function ContextBadge({ learner }: { learner: Learner | null }) {
   if (!learner) {
     return (
-      <span className="inline-flex h-8 w-max items-center gap-2 rounded-full bg-light pr-3.5 pl-1 font-semibold">
-        <span className="grid size-6 place-items-center rounded-full bg-action text-white">
-          <LibraryBig size={14} strokeWidth={2} aria-hidden />
-        </span>
-        {globalLabel}
+      <span className="inline-flex items-center gap-1.5">
+        <LibraryBig size={18} strokeWidth={1.75} aria-hidden />
+        Общий материал
       </span>
     );
   }
   return (
-    <span className="inline-flex h-8 w-max items-center gap-2 rounded-full bg-selected pr-3.5 pl-1 font-semibold text-ink">
-      <Avatar learner={learner} size="sm" className="scale-75" />
-      {learnerLabel ?? `Версия ${forLearner(learner)}`}
+    <span className="inline-flex items-center gap-2">
+      <Avatar learner={learner} size="sm" className="-my-1 scale-75" />
+      Версия {forLearner(learner)}
     </span>
   );
 }

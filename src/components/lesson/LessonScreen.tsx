@@ -1,18 +1,17 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { ClipboardPlus, FileX, Info, Pencil, Play, Sparkles } from "lucide-react";
 import { ContextBadge } from "@/components/ContextBadge";
 import { HomeworkStatusMenu } from "@/components/learner/LearnerCards";
-import { LessonStatusChip } from "@/components/ui/Badge";
+import { lessonStatus } from "@/components/ui/Badge";
 import { Breadcrumbs, type Crumb } from "@/components/ui/Breadcrumbs";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { toast } from "@/components/ui/Toast";
 import { contextHref, useActiveLearner } from "@/lib/context";
 import { folderPath, markAdapted, resolveLesson } from "@/lib/domain";
-import { formatDate } from "@/lib/format";
 import { forLearner, genitive } from "@/lib/learners";
 import { useStore } from "@/lib/store";
 import type { AppData, Learner, Lesson, LessonBlock, LessonSession } from "@/lib/types";
@@ -55,18 +54,20 @@ export function LessonScreen() {
 
         <div>
           <h1 className="text-h1">{lesson.title}</h1>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
+          {/* One quiet line, like the profile history: whose version, then where the lesson stands. */}
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-ink-secondary">
             <ContextBadge learner={learner} />
             {session && (
-              <span className="flex items-center gap-2 text-ink-secondary">
-                <LessonStatusChip status={session.status} />
-                {session.status === "in_progress"
-                  ? `начат ${formatDate(session.startedAt)}`
-                  : `завершён ${formatDate(session.completedAt!)}`}
-              </span>
+              <>
+                <span aria-hidden>·</span>
+                {lessonStatus[session.status].label}
+              </>
             )}
             {homework.map((hw) => (
-              <HomeworkStatusMenu key={hw.id} homework={hw} />
+              <Fragment key={hw.id}>
+                <span aria-hidden>·</span>
+                <HomeworkStatusMenu homework={hw} />
+              </Fragment>
             ))}
           </div>
         </div>

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { History } from "lucide-react";
 import { Button, buttonClass } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
-import { homeworkChipLabel, homeworkStatus, lessonStatus } from "@/components/ui/Badge";
+import { homeworkStatus, LessonStatusText } from "@/components/ui/Badge";
 import { FilterChips } from "@/components/ui/FilterChips";
 import { contextHref } from "@/lib/context";
 import { getCurrentSession, getLessonHistory, lessonOfLearnerLesson, type HistoryEntry } from "@/lib/domain";
@@ -13,8 +13,6 @@ import { formatDate } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { HomeworkStatus, Learner } from "@/lib/types";
 
-/** Homework in this status waits for the teacher: set in ink in the history. */
-const NEEDS_ATTENTION: HomeworkStatus = "completed";
 
 /**
  * Learner actions next to the name (spec §7.1): lesson history one quiet click away, then one way back
@@ -114,15 +112,7 @@ function HistoryRow({ entry, learnerId }: { entry: HistoryEntry; learnerId: stri
           {[entry.textbook?.title, formatDate(entry.lastActivityAt)].filter(Boolean).join(" · ")}
         </p>
       </div>
-      <p className="text-caption text-ink-secondary">
-        {entry.status && lessonStatus[entry.status].label}
-        {entry.status && entry.homework && " · "}
-        {entry.homework && (
-          <span className={entry.homework === NEEDS_ATTENTION ? "font-semibold text-ink" : undefined}>
-            {homeworkChipLabel[entry.homework]}
-          </span>
-        )}
-      </p>
+      <LessonStatusText lesson={entry.status} homework={entry.homework} />
     </Link>
   );
 }

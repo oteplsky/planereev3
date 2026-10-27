@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, ChevronDown, RotateCcw } from "lucide-react";
-import { HomeworkChip, homeworkChipLabel } from "@/components/ui/Badge";
+import { homeworkChipLabel, homeworkTextClass } from "@/components/ui/Badge";
 import { Menu } from "@/components/ui/Menu";
 import { toast } from "@/components/ui/Toast";
 import { useStore } from "@/lib/store";
@@ -27,7 +27,7 @@ const statusToast: Record<HomeworkStatus, string> = {
   reviewed: "Отмечено как проверенное",
 };
 
-/** Homework status in the lesson header; the badge opens the status actions. */
+/** Homework status in the lesson header's status line; the text opens the status actions. */
 export function HomeworkStatusMenu({ homework }: { homework: HomeworkAssignment }) {
   const setHomeworkStatus = useStore((s) => s.setHomeworkStatus);
   return (
@@ -47,10 +47,10 @@ export function HomeworkStatusMenu({ homework }: { homework: HomeworkAssignment 
           type="button"
           title={homework.title}
           aria-label={`${homeworkChipLabel[homework.status]}: ${homework.title}`}
-          className="flex items-center gap-1.5 rounded-xs transition-opacity duration-[120ms] hover:opacity-80"
+          className={`inline-flex items-center gap-0.5 rounded-xs transition-colors duration-[120ms] hover:text-ink aria-expanded:text-ink ${homeworkTextClass(homework.status)}`}
         >
-          <HomeworkChip status={homework.status} />
-          <ChevronDown size={16} strokeWidth={1.75} className="text-ink-secondary" aria-hidden />
+          {homeworkChipLabel[homework.status]}
+          <ChevronDown size={16} strokeWidth={1.75} aria-hidden />
         </button>
       )}
     />

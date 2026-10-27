@@ -349,6 +349,87 @@ describe("library queries", () => {
   });
 });
 
+describe("library order", () => {
+  const keys = (data: AppData, folderId: string | null) =>
+    d.libraryLocation(data, folderId).materials.map((m) => m.item.id);
+
+  it("puts new, duplicated and moved materials first", () => {
+    let data = createDemoData();
+    const tb = d.createTextbook(data, NEW_TEXTBOOK, null, T1);
+    data = tb.data;
+    expect(keys(data, null)[0]).toBe(tb.textbookId);
+    const lesson = d.createLesson(data, "Новый урок", { folderId: null }, T2);
+    data = lesson.data;
+    expect(keys(data, null).slice(0, 2)).toEqual([lesson.lessonId, tb.textbookId]);
+    data = d.moveMaterial(data, "lesson", "les_conditionals", null);
+    expect(keys(data, null)[0]).toBe("les_conditionals");
+    const copy = d.duplicateTextbook(data, tb.textbookId, T3);
+    expect(keys(copy.data, null)[0]).toBe(copy.textbookId);
+  });
+
+  it("keeps a dragged order, textbooks and lessons mixed", () => {
+    const data = createDemoData();
+    const order = d.libraryLocation(data, "fld_grammar").materials.map((m) => ({ kind: m.kind, id: m.item.id })).reverse();
+    const next = d.reorderMaterials(data, order);
+    expect(keys(next, "fld_grammar")).toEqual(order.map((o) => o.id));
+    // Editing doesn't reshuffle it.
+    expect(keys(d.renameMaterial(next, order[1].kind, order[1].id, "Другое", T3), "fld_grammar")).toEqual(order.map((o) => o.id));
+  });
+});
+
+describe("shared textbooks", () => {
+  it("saves an independent copy at the top of the root, credited to the sender", () => {
+    let data = createDemoData();
+    data = d.moveMaterial(data, "textbook", "tb_grammar_a2", "fld_grammar");
+    const r = d.saveSharedTextbook(data, "tb_grammar_a2", T1);
+    const copy = r.data.textbooks.find((t) => t.id === r.textbookId)!;
+    expect(copy.sharedSourceId).toBe("tb_grammar_a2");
+    expect(copy.folderId).toBeNull();
+    expect(copy.author).toEqual(d.sharedAuthor(data, data.textbooks.find((t) => t.id === "tb_grammar_a2")!));
+    expect(d.libraryLocation(r.data, null).materials[0].item.id).toBe(copy.id);
+    expect(d.textbookFromShare(r.data, "tb_grammar_a2")?.id).toBe(copy.id);
+    expect(d.textbookLessonCount(copy)).toBe(d.textbookLessonCount(data.textbooks.find((t) => t.id === "tb_grammar_a2")!));
+    expect(r.data.lessons.filter((l) => l.textbookId === copy.id).every((l) => !data.lessons.some((o) => o.id === l.id))).toBe(true);
+  });
+});
+
+describe("shared lessons", () => {
+  it("saves a textbook lesson as a standalone copy credited to the textbook's author", () => {
+    const data = createDemoData();
+    const r = d.saveSharedLesson(data, PS, T1);
+    const copy = r.data.lessons.find((l) => l.id === r.lessonId)!;
+    expect(copy).toMatchObject({ textbookId: null, folderId: null, sharedSourceId: PS });
+    expect(d.materialAuthor(r.data, copy)).toEqual(d.sharedLessonAuthor(data, data.lessons.find((l) => l.id === PS)!));
+    expect(d.libraryLocation(r.data, null).materials[0].item.id).toBe(copy.id);
+    expect(d.lessonFromShare(r.data, PS)?.id).toBe(copy.id);
+    expect(d.libraryAuthors(r.data).some((a) => a.id === copy.author!.id)).toBe(true);
+  });
+});
+
+describe("lesson numbers", () => {
+  it("count within each section, or straight through without sections", () => {
+    let data = createDemoData();
+    let tb = d.createTextbook(data, NEW_TEXTBOOK, null, T1);
+    data = d.setUseSections(tb.data, tb.textbookId, true, T1);
+    data = d.addSection(data, tb.textbookId, "Unit 1", T1);
+    data = d.addSection(data, tb.textbookId, "Unit 2", T1);
+    const [s1, s2] = data.textbooks.find((t) => t.id === tb.textbookId)!.sections;
+    for (const [title, sectionId] of [["a", s1.id], ["b", s1.id], ["c", s2.id]] as const) {
+      data = d.createLesson(data, title, { textbookId: tb.textbookId, sectionId }, T2).data;
+    }
+    const byTitle = (data: AppData, id: string) => {
+      const numbers = d.lessonNumbers(data, data.textbooks.find((t) => t.id === id)!);
+      return Object.fromEntries(data.lessons.filter((l) => numbers.has(l.id)).map((l) => [l.title, numbers.get(l.id)]));
+    };
+    expect(byTitle(data, tb.textbookId)).toEqual({ a: "1.1", b: "1.2", c: "2.1" });
+
+    tb = d.createTextbook(data, NEW_TEXTBOOK, null, T1);
+    data = tb.data;
+    for (const title of ["x", "y"]) data = d.createLesson(data, title, { textbookId: tb.textbookId }, T2).data;
+    expect(byTitle(data, tb.textbookId)).toEqual({ x: "1", y: "2" });
+  });
+});
+
 describe("search", () => {
   it("finds materials in every folder as one flat list", () => {
     const r = d.searchMaterials(createDemoData(), "  CONDITIONAL ");

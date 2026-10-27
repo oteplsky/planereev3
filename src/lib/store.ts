@@ -54,10 +54,15 @@ interface Store {
   createLesson(title: string, placement: d.LessonPlacement): string;
   renameMaterial(kind: Kind, id: string, title: string): void;
   moveMaterial(kind: Kind, id: string, folderId: string | null): void;
+  /** Drag and drop: one location's materials in their new order. */
+  reorderMaterials(order: { kind: Kind; id: string }[]): void;
   setCover(kind: Kind, id: string, cover: AccentColor | null): void;
   duplicateMaterial(kind: Kind, id: string): string;
   /** Returns the new textbook's id in the teacher's library. */
   addTextbookFromCatalog(catalogTextbookId: string): string | null;
+  /** «Сохранить себе» from a shared link. Returns the copy's id. */
+  saveSharedTextbook(textbookId: string): string | null;
+  saveSharedLesson(lessonId: string): string | null;
   deleteMaterial(kind: Kind, id: string): Outcome;
 
   // Textbook structure
@@ -136,6 +141,7 @@ export const useStore = create<Store>()(
         renameMaterial: (kind, id, title) =>
           commit(d.renameMaterial(data(), kind, id, title, now())),
         moveMaterial: (kind, id, folderId) => commit(d.moveMaterial(data(), kind, id, folderId)),
+        reorderMaterials: (order) => commit(d.reorderMaterials(data(), order)),
         setCover: (kind, id, cover) => commit(d.setCover(data(), kind, id, cover)),
         duplicateMaterial(kind, id) {
           if (kind === "lesson") {
@@ -151,6 +157,16 @@ export const useStore = create<Store>()(
           const r = d.addTextbookFromCatalog(data(), catalog, catalogTextbookId, now());
           commit(r.data);
           return r.textbookId;
+        },
+        saveSharedTextbook(textbookId) {
+          const r = d.saveSharedTextbook(data(), textbookId, now());
+          commit(r.data);
+          return r.textbookId;
+        },
+        saveSharedLesson(lessonId) {
+          const r = d.saveSharedLesson(data(), lessonId, now());
+          commit(r.data);
+          return r.lessonId;
         },
         deleteMaterial: (kind, id) =>
           apply(kind === "lesson" ? d.deleteLesson(data(), id) : d.deleteTextbook(data(), id)),

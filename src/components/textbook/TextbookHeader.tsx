@@ -1,10 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Camera, Copy, Ellipsis, FolderInput, Trash2 } from "lucide-react";
+import { Camera, Copy, Ellipsis, FolderInput, Share2, Trash2, X } from "lucide-react";
 import { AuthorLine } from "@/components/library/AuthorLine";
 import { Cover } from "@/components/library/Cover";
-import { IconButton, TextButton } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/Button";
 import { Menu } from "@/components/ui/Menu";
 import { Progress } from "@/components/ui/Progress";
 import { toast } from "@/components/ui/Toast";
@@ -19,6 +19,7 @@ const iconProps = { size: 18, strokeWidth: 1.75, "aria-hidden": true } as const;
 interface TextbookHeaderProps {
   textbook: Textbook;
   editable: boolean;
+  onShare: () => void;
   onMove: () => void;
   onDelete: () => void;
   /** In a learner context: how far the learner has got. */
@@ -26,7 +27,7 @@ interface TextbookHeaderProps {
 }
 
 /** Cover, title, description and metadata. In the global context every field is edited in place and saved at once. */
-export function TextbookHeader({ textbook, editable, onMove, onDelete, progress }: TextbookHeaderProps) {
+export function TextbookHeader({ textbook, editable, onShare, onMove, onDelete, progress }: TextbookHeaderProps) {
   const duplicateMaterial = useStore((s) => s.duplicateMaterial);
   const updateTextbookDetails = useStore((s) => s.updateTextbookDetails);
 
@@ -57,6 +58,7 @@ export function TextbookHeader({ textbook, editable, onMove, onDelete, progress 
           <TitleField key={textbook.title} textbook={textbook} />
           <Menu
             items={[
+              { label: "Поделиться", icon: <Share2 {...iconProps} />, onSelect: onShare },
               {
                 label: "Создать копию",
                 icon: <Copy {...iconProps} />,
@@ -166,29 +168,39 @@ function CoverEditor({ textbook }: { textbook: Textbook }) {
   const pick = () => inputRef.current?.click();
 
   return (
-    <div className="flex w-48 shrink-0 flex-col gap-2 sm:w-56">
+    <div className="relative w-48 shrink-0 sm:w-56">
       <button
         type="button"
         onClick={pick}
         aria-label={hasCover ? "Заменить обложку" : "Загрузить обложку"}
-        className="group relative overflow-hidden rounded-lg border border-line"
+        className="group relative block w-full overflow-hidden rounded-lg border border-line"
       >
         <Cover cover={textbook.cover} kind="textbook" image={textbook.coverImage} />
         <span className="absolute inset-0 grid place-items-center bg-neutral-950/45 text-white opacity-0 transition-opacity duration-[120ms] group-hover:opacity-100 group-focus-visible:opacity-100">
           <Camera size={26} strokeWidth={1.75} aria-hidden />
         </span>
       </button>
-      {/* Uploading and replacing happen on the cover itself; only removal needs its own control. */}
+      {/* Uploading and replacing happen on the cover itself; removal is the × in its corner. */}
       {hasCover && (
-        <TextButton
-          className="text-danger-hover hover:text-danger-hover"
-          onClick={() => {
-            setTextbookCoverImage(textbook.id, null);
-            toast("Обложка удалена");
-          }}
-        >
-          Удалить обложку
-        </TextButton>
+        <div className="group/remove absolute top-2 right-2">
+          <button
+            type="button"
+            aria-label="Удалить обложку"
+            onClick={() => {
+              setTextbookCoverImage(textbook.id, null);
+              toast("Обложка удалена");
+            }}
+            className="grid size-8 place-items-center rounded-full bg-surface/90 text-ink shadow-1 transition-colors duration-[120ms] hover:bg-surface hover:text-danger-hover"
+          >
+            <X size={18} strokeWidth={2} aria-hidden />
+          </button>
+          <span
+            role="tooltip"
+            className="pointer-events-none absolute top-full right-0 z-30 mt-2 w-max rounded-sm bg-neutral-900 px-3 py-2 text-caption text-white opacity-0 shadow-2 transition-opacity duration-[120ms] group-focus-within/remove:opacity-100 group-hover/remove:opacity-100"
+          >
+            Удалить обложку
+          </span>
+        </div>
       )}
       <input
         ref={inputRef}

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { forwardRef, type ButtonHTMLAttributes } from "react";
-import { Copy, Ellipsis, FileText, Folder, FolderInput, FolderPlus, Pencil, Plus, Trash2 } from "lucide-react";
+import { forwardRef, type ButtonHTMLAttributes, type DragEvent } from "react";
+import { Copy, Ellipsis, FileText, Folder, FolderInput, FolderPlus, Pencil, Plus, Share2, Trash2 } from "lucide-react";
 import { IconButton } from "@/components/ui/Button";
 import { Menu, type MenuItem } from "@/components/ui/Menu";
 import { Cover, StackPages } from "./Cover";
@@ -16,6 +16,8 @@ export interface CardActions {
   onRename?(): void;
   onDelete(): void;
   onDuplicate?(): void;
+  /** «Поделиться»: a link to view or save a copy. */
+  onShare?(): void;
   onMove?(): void;
   /** Defaults to «Переместить в папку». */
   moveLabel?: string;
@@ -26,6 +28,7 @@ export interface CardActions {
 function actionItems(actions: CardActions): MenuItem[] {
   const items: MenuItem[] = [];
   if (actions.onRename) items.push({ label: "Переименовать", icon: <Pencil {...iconProps} />, onSelect: actions.onRename });
+  if (actions.onShare) items.push({ label: "Поделиться", icon: <Share2 {...iconProps} />, onSelect: actions.onShare });
   if (actions.onDuplicate) items.push({ label: "Создать копию", icon: <Copy {...iconProps} />, onSelect: actions.onDuplicate });
   if (actions.onMove) {
     items.push({ label: actions.moveLabel ?? "Переместить в папку", icon: <FolderInput {...iconProps} />, onSelect: actions.onMove });
@@ -130,18 +133,31 @@ interface MaterialCardProps {
   /** Textbooks: shown as a count on the cover. */
   lessonCount?: number;
   actions?: CardActions;
+  /** The library's own order: the whole card is dragged to a new place. */
+  reorder?: ReorderHandlers;
+}
+
+export interface ReorderHandlers {
+  dragging: boolean;
+  onDragStart(e: DragEvent): void;
+  onDragEnd(): void;
+  onDragOver(e: DragEvent): void;
 }
 
 /**
  * UI kit · Карточки: white, 1px #EFEFEF outline, no shadow; outline darkens on hover.
  * Library cards (with a cover) reserve room on top so a textbook can show as a stack of pages.
  */
-export function MaterialCard({ href, kind, title, caption, cover, coverImage, leading, badge, lessonCount, actions }: MaterialCardProps) {
+export function MaterialCard({ href, kind, title, caption, cover, coverImage, leading, badge, lessonCount, actions, reorder }: MaterialCardProps) {
   const hasCover = cover !== undefined;
   const stacked = hasCover && kind === "textbook";
+  const { dragging, ...dragHandlers } = reorder ?? {};
 
   return (
-    <div className={`group relative flex flex-col ${hasCover ? "pt-4" : ""}`}>
+    <div
+      {...(reorder ? { draggable: true, ...dragHandlers } : {})}
+      className={`group relative flex flex-col transition-opacity duration-[120ms] ${hasCover ? "pt-4" : ""} ${dragging ? "opacity-40" : ""}`}
+    >
       {stacked && <StackPages cover={coverImage ? null : cover} />}
       <div className="relative flex flex-1 flex-col rounded-lg border border-line bg-surface transition-colors duration-[120ms] group-hover:border-line-strong">
         {hasCover && <Cover cover={cover} kind={kind} image={coverImage} />}
@@ -155,7 +171,8 @@ export function MaterialCard({ href, kind, title, caption, cover, coverImage, le
         <div className={`flex gap-3 p-4 ${leading ? "items-center" : "items-start"}`}>
           {leading}
           <div className="min-w-0 flex-1">
-            <Link href={href} className="line-clamp-2 text-body-lg font-bold after:absolute after:inset-0 after:rounded-lg">
+            {/* Not draggable itself, so dragging moves the card rather than the link. */}
+            <Link href={href} draggable={reorder ? false : undefined} className="line-clamp-2 text-body-lg font-bold after:absolute after:inset-0 after:rounded-lg">
               {title}
             </Link>
             {caption && <p className="mt-1 text-body text-ink-secondary">{caption}</p>}

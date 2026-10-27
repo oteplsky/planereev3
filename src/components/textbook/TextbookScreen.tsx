@@ -6,7 +6,7 @@ import { useState, type DragEvent, type KeyboardEvent, type ReactNode } from "re
 import { ArrowDown, ArrowUp, BookX, Check, Ellipsis, FolderOutput, GripVertical, ListPlus, Pencil, Plus, Trash2 } from "lucide-react";
 import { ActionsMenu, type CardActions } from "@/components/library/Cards";
 import { LibraryDialogs, requestDelete, type DialogState } from "@/components/library/LibraryDialogs";
-import { LessonStatusChips } from "@/components/ui/Badge";
+import { LessonStatusText } from "@/components/ui/Badge";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Button, IconButton } from "@/components/ui/Button";
 import { ConfirmDialog, Dialog, PromptDialog } from "@/components/ui/Dialog";
@@ -19,6 +19,7 @@ import {
   folderPath,
   homeworkStatusForLearner,
   lessonHasLearnerActivity,
+  lessonNumbers,
   lessonStatusForLearner,
   lessonTitleFor,
   textbookLessonCount,
@@ -87,8 +88,7 @@ export function TextbookScreen() {
 
   const { sections, loose } = textbookLessons(data, textbook);
   const useSections = textbook.useSections;
-  const ordered = useSections ? sections.flatMap((s) => s.lessons) : loose;
-  const lessonNumber = (lessonId: string) => ordered.findIndex((l) => l.id === lessonId) + 1;
+  const numbers = lessonNumbers(data, textbook);
   const lessonsIn = (container: string | null) =>
     container === null ? loose : (sections.find((s) => s.section.id === container)?.lessons ?? []);
   const libraryHref = contextHref("/library", learnerId, { folder: textbook.folderId });
@@ -161,6 +161,7 @@ export function TextbookScreen() {
     const target = { kind: "lesson" as const, id: lesson.id, title: lesson.title };
     return {
       onRename: () => setLibDialog({ type: "rename", target }),
+      onShare: () => setLibDialog({ type: "share", target }),
       onDuplicate: () => {
         store.duplicateMaterial("lesson", lesson.id);
         toast("Копия урока создана");
@@ -209,17 +210,15 @@ export function TextbookScreen() {
             {indicatorAt(i)}
             <LessonRow
               lesson={learnerId ? { ...lesson, title: lessonTitleFor(data, lesson, learnerId) } : lesson}
-              number={lessonNumber(lesson.id)}
+              number={numbers.get(lesson.id)!}
               href={contextHref(`/lesson/${lesson.id}`, learnerId)}
               dragging={drag?.id === lesson.id}
               status={
                 learnerId && (
-                  <>
-                    <LessonStatusChips
-                      lesson={lessonStatusForLearner(data, learnerId, lesson.id)}
-                      homework={homeworkStatusForLearner(data, learnerId, lesson.id)}
-                    />
-                  </>
+                  <LessonStatusText
+                    lesson={lessonStatusForLearner(data, learnerId, lesson.id)}
+                    homework={homeworkStatusForLearner(data, learnerId, lesson.id)}
+                  />
                 )
               }
               handle={
@@ -271,6 +270,7 @@ export function TextbookScreen() {
           textbook={textbook}
           editable={editable}
           progress={progress}
+          onShare={() => setLibDialog({ type: "share", target: textbookTarget })}
           onMove={() => setLibDialog({ type: "move", target: textbookTarget })}
           onDelete={() => setLibDialog(requestDelete(data, textbookTarget))}
         />
@@ -446,7 +446,8 @@ function DragHandle({ id, label, onDragStart, onDragEnd, onKeyDown }: DragHandle
 
 interface LessonRowProps {
   lesson: Lesson;
-  number: number;
+  /** «3», or «2.1» in a textbook with sections. */
+  number: string;
   href: string;
   dragging?: boolean;
   status?: ReactNode;
@@ -464,7 +465,7 @@ export function LessonRow({ lesson, number, href, dragging = false, status, hand
       } ${dragging ? "opacity-40" : ""}`}
     >
       {handle}
-      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-light text-caption font-bold text-action" aria-hidden>
+      <span className="grid h-8 min-w-8 shrink-0 place-items-center rounded-full bg-light px-1.5 text-caption font-bold text-action tabular-nums" aria-hidden>
         {number}
       </span>
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">

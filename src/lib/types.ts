@@ -77,6 +77,10 @@ export interface Textbook {
   author: Author | null;
   /** The catalog textbook this one was added from. The copy is independent: catalog updates don't reach it. */
   catalogSourceId: string | null;
+  /** The textbook this one was saved from through a «С сохранением» link. Independent, like catalog copies. */
+  sharedSourceId?: string;
+  /** Place in its library location; see `libraryLocation`. */
+  position?: number;
   updatedAt: string;
 }
 
@@ -101,6 +105,12 @@ export interface Lesson {
   folderId: string | null;
   content: MockLessonContent;
   cover: AccentColor | null;
+  /** Standalone lessons: place in its library location; see `libraryLocation`. */
+  position?: number;
+  /** Standalone lessons saved from someone else's link: who made them. Textbook lessons take their textbook's. */
+  author?: Author | null;
+  /** The lesson this one was saved from through a «С сохранением» link. */
+  sharedSourceId?: string;
   updatedAt: string;
 }
 
