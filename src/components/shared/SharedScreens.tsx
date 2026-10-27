@@ -11,7 +11,7 @@ import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Button, buttonClass } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { toast } from "@/components/ui/Toast";
-import { lessonFromShare, shareRules, sharedAuthor, sharedLessonAuthor, textbookFromShare } from "@/lib/domain";
+import { lessonFromShare, shareStatus, sharedAuthor, sharedLessonAuthor, textbookFromShare } from "@/lib/domain";
 import { useStore } from "@/lib/store";
 import { sharedHref, sharedTextbookLessonHref, type ShareAccess, type ShareTarget } from "@/lib/share";
 import type { Lesson } from "@/lib/types";
@@ -29,17 +29,15 @@ export function SharedTextbookScreen() {
   const access = useAccess();
   const data = useStore((s) => s.data);
   const textbook = data.textbooks.find((t) => t.id === id);
-  const rules = shareRules(data, "textbook", id);
-
-  // Someone else's material is never shared, even if the link is typed in by hand.
-  if (!textbook || !rules.share) return <Missing kind="textbook" />;
+  // Only own material is shared, even if the link is typed in by hand.
+  if (!textbook || shareStatus(data, "textbook", id) !== "own") return <Missing kind="textbook" />;
 
   return (
     <TextbookPreview
       materials={data}
       textbook={textbook}
       author={sharedAuthor(data, textbook)}
-      action={access === "save" && rules.save && <SaveShared target={{ kind: "textbook", id: textbook.id }} />}
+      action={access === "save" && <SaveShared target={{ kind: "textbook", id: textbook.id }} />}
       lessonHref={(lesson) => sharedTextbookLessonHref(textbook.id, lesson.id, access)}
     />
   );
@@ -52,15 +50,13 @@ export function SharedLessonScreen() {
   const data = useStore((s) => s.data);
   const textbook = data.textbooks.find((t) => t.id === id);
   const lesson = data.lessons.find((l) => l.id === lessonId && l.textbookId === id);
-  const rules = shareRules(data, "textbook", id);
-
-  if (!textbook || !lesson || !rules.share) return <Missing kind="lesson" />;
+  if (!textbook || !lesson || shareStatus(data, "textbook", id) !== "own") return <Missing kind="lesson" />;
 
   return (
     <LessonPreview
       lesson={lesson}
       crumbs={[{ label: textbook.title, href: sharedHref({ kind: "textbook", id: textbook.id }, access) }]}
-      action={access === "save" && rules.save && <SaveShared target={{ kind: "textbook", id: textbook.id }} />}
+      action={access === "save" && <SaveShared target={{ kind: "textbook", id: textbook.id }} />}
     />
   );
 }
@@ -72,7 +68,7 @@ export function SharedStandaloneLessonScreen() {
   const data = useStore((s) => s.data);
   const lesson = data.lessons.find((l) => l.id === id);
 
-  if (!lesson || !shareRules(data, "lesson", id).share) return <Missing kind="lesson" />;
+  if (!lesson || shareStatus(data, "lesson", id) !== "own") return <Missing kind="lesson" />;
 
   return (
     <LessonPreview

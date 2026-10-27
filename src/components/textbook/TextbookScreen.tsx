@@ -6,6 +6,7 @@ import { useState, type DragEvent, type KeyboardEvent, type ReactNode } from "re
 import { ArrowDown, ArrowUp, BookOpen, BookX, Check, Ellipsis, FolderOutput, GripVertical, ListPlus, Pencil, Plus, Trash2 } from "lucide-react";
 import { ActionsMenu, type CardActions } from "@/components/library/Cards";
 import { LibraryDialogs, requestDelete, type DialogState } from "@/components/library/LibraryDialogs";
+import { shareAction } from "@/components/library/ShareDialog";
 import { LessonStatusText } from "@/components/ui/Badge";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -22,7 +23,6 @@ import {
   lessonNumbers,
   lessonStatusForLearner,
   lessonTitleFor,
-  shareRules,
   textbookLessonCount,
   textbookLessons,
   textbookProgress,
@@ -162,7 +162,7 @@ export function TextbookScreen() {
     const target = { kind: "lesson" as const, id: lesson.id, title: lesson.title };
     return {
       onRename: () => setLibDialog({ type: "rename", target }),
-      onShare: shareRules(data, "lesson", lesson.id).share ? () => setLibDialog({ type: "share", target }) : undefined,
+      ...shareAction(data, "lesson", lesson.id, () => setLibDialog({ type: "share", target })),
       onDuplicate: () => {
         store.duplicateMaterial("lesson", lesson.id);
         toast("Копия урока создана");
@@ -276,7 +276,7 @@ export function TextbookScreen() {
           textbook={textbook}
           editable={editable}
           progress={progress}
-          onShare={shareRules(data, "textbook", textbook.id).share ? () => setLibDialog({ type: "share", target: textbookTarget }) : undefined}
+          share={shareAction(data, "textbook", textbook.id, () => setLibDialog({ type: "share", target: textbookTarget }))}
           onMove={() => setLibDialog({ type: "move", target: textbookTarget })}
           onDelete={() => setLibDialog(requestDelete(data, textbookTarget))}
         />

@@ -18,6 +18,8 @@ export interface CardActions {
   onDuplicate?(): void;
   /** «Поделиться»: a link to view or save a copy. */
   onShare?(): void;
+  /** «Поделиться» is shown but locked, with this reason. */
+  shareLockedReason?: string;
   onMove?(): void;
   /** Defaults to «Переместить в папку». */
   moveLabel?: string;
@@ -28,7 +30,9 @@ export interface CardActions {
 function actionItems(actions: CardActions): MenuItem[] {
   const items: MenuItem[] = [];
   if (actions.onRename) items.push({ label: "Переименовать", icon: <Pencil {...iconProps} />, onSelect: actions.onRename });
-  if (actions.onShare) items.push({ label: "Поделиться", icon: <Share2 {...iconProps} />, onSelect: actions.onShare });
+  if (actions.onShare) {
+    items.push({ label: "Поделиться", icon: <Share2 {...iconProps} />, onSelect: actions.onShare, lockedReason: actions.shareLockedReason });
+  }
   if (actions.onDuplicate) items.push({ label: "Создать копию", icon: <Copy {...iconProps} />, onSelect: actions.onDuplicate });
   if (actions.onMove) {
     items.push({ label: actions.moveLabel ?? "Переместить в папку", icon: <FolderInput {...iconProps} />, onSelect: actions.onMove });

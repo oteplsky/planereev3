@@ -28,7 +28,6 @@ import {
   libraryAuthors,
   libraryLocation,
   searchMaterials,
-  shareRules,
   sortByRecentUse,
   textbookFromCatalog,
   textbookLessonCount,
@@ -38,6 +37,7 @@ import {
   lessonTitleFor,
 } from "@/lib/domain";
 import { hasActiveFilters, type MetaFilters } from "@/lib/meta";
+import { shareAction } from "./ShareDialog";
 import { count, TEXTBOOKS } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { Learner } from "@/lib/types";
@@ -190,7 +190,7 @@ export function Library({ learner, folderId }: LibraryProps) {
     const actions = editable
       ? {
           onRename: () => setDialog({ type: "rename", target }),
-          onShare: shareRules(data, kind, item.id).share ? () => setDialog({ type: "share", target }) : undefined,
+          ...shareAction(data, kind, item.id, () => setDialog({ type: "share", target })),
           onDuplicate: () => duplicate(kind, item.id),
           onMove: () => setDialog({ type: "move", target }),
           extra: [

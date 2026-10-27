@@ -527,14 +527,17 @@ export function materialAuthor(data: Materials, item: Textbook | Lesson): Author
 }
 
 /**
- * Sharing is for the teacher's own work. Someone else's material (a catalog or saved textbook, a lesson
- * from one) can't be shared at all; an own textbook with someone else's lessons only for viewing.
+ * Sharing is for the teacher's own work only. «foreign»: someone else's material (a catalog or saved
+ * textbook, a lesson from one) — no «Поделиться» at all. «mixed»: an own textbook with someone else's
+ * lessons — «Поделиться» is shown but locked. «own»: both view and save links.
  */
-export function shareRules(data: AppData, kind: "lesson" | "textbook", id: string): { share: boolean; save: boolean } {
+export type ShareStatus = "own" | "mixed" | "foreign";
+
+export function shareStatus(data: AppData, kind: "lesson" | "textbook", id: string): ShareStatus {
   const item = kind === "lesson" ? data.lessons.find((l) => l.id === id) : data.textbooks.find((t) => t.id === id);
-  if (!item || materialAuthor(data, item) !== null) return { share: false, save: false };
+  if (!item || materialAuthor(data, item) !== null) return "foreign";
   const lessons = kind === "textbook" ? data.lessons.filter((l) => l.textbookId === id) : [];
-  return { share: true, save: lessons.every((l) => materialAuthor(data, l) === null) };
+  return lessons.every((l) => materialAuthor(data, l) === null) ? "own" : "mixed";
 }
 
 /** «Источник» filter: the teacher's own materials, or one author's. Null = everything. */

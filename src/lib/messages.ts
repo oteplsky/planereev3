@@ -10,3 +10,6 @@ export const blockMessages: Record<BlockReason, { title: string; description: st
 
 /** Added to a delete confirmation when learners have worked with the material. */
 export const KEPT_FOR_LEARNERS = "У учеников останутся их уроки и домашки.";
+
+/** Why «Поделиться» is locked on an own textbook with someone else's lessons. */
+export const MIXED_TEXTBOOK_SHARE = "В учебнике есть чужие уроки";

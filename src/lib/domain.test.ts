@@ -440,15 +440,15 @@ describe("someone else's lessons", () => {
     expect(d.moveLessonToTextbook(own.data, own.lessonId, tb.id, wrong, T2)).toBe(own.data);
   });
 
-  it("can't be shared; an own textbook with them only for viewing", () => {
+  it("can't be shared, nor can an own textbook that has them", () => {
     const { data, tb, lessonId } = withCatalogTextbook();
-    expect(d.shareRules(data, "textbook", tb.id)).toEqual({ share: false, save: false });
-    expect(d.shareRules(data, "lesson", lessonId)).toEqual({ share: false, save: false });
+    expect(d.shareStatus(data, "textbook", tb.id)).toBe("foreign");
+    expect(d.shareStatus(data, "lesson", lessonId)).toBe("foreign");
     const own = d.createTextbook(data, NEW_TEXTBOOK, null, T1);
-    expect(d.shareRules(own.data, "textbook", own.textbookId)).toEqual({ share: true, save: true });
+    expect(d.shareStatus(own.data, "textbook", own.textbookId)).toBe("own");
     const mixed = d.moveLessonToTextbook(own.data, lessonId, own.textbookId, null, T2);
-    expect(d.shareRules(mixed, "textbook", own.textbookId)).toEqual({ share: true, save: false });
-    expect(d.shareRules(mixed, "lesson", lessonId).share).toBe(false);
+    expect(d.shareStatus(mixed, "textbook", own.textbookId)).toBe("mixed");
+    expect(d.shareStatus(mixed, "lesson", lessonId)).toBe("foreign");
   });
 });
 

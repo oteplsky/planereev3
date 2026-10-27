@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { Camera, Copy, Ellipsis, FolderInput, Share2, Trash2, X } from "lucide-react";
 import { AuthorLine } from "@/components/library/AuthorLine";
+import type { CardActions } from "@/components/library/Cards";
 import { Cover } from "@/components/library/Cover";
 import { IconButton } from "@/components/ui/Button";
 import { Menu } from "@/components/ui/Menu";
@@ -19,8 +20,8 @@ const iconProps = { size: 18, strokeWidth: 1.75, "aria-hidden": true } as const;
 interface TextbookHeaderProps {
   textbook: Textbook;
   editable: boolean;
-  /** Omitted for someone else's textbook: it can't be shared. */
-  onShare?: () => void;
+  /** «Поделиться»; empty for someone else's textbook, which can't be shared. */
+  share: Pick<CardActions, "onShare" | "shareLockedReason">;
   onMove: () => void;
   onDelete: () => void;
   /** In a learner context: how far the learner has got. */
@@ -28,7 +29,7 @@ interface TextbookHeaderProps {
 }
 
 /** Cover, title, description and metadata. In the global context every field is edited in place and saved at once. */
-export function TextbookHeader({ textbook, editable, onShare, onMove, onDelete, progress }: TextbookHeaderProps) {
+export function TextbookHeader({ textbook, editable, share, onMove, onDelete, progress }: TextbookHeaderProps) {
   const duplicateMaterial = useStore((s) => s.duplicateMaterial);
   const updateTextbookDetails = useStore((s) => s.updateTextbookDetails);
 
@@ -59,7 +60,9 @@ export function TextbookHeader({ textbook, editable, onShare, onMove, onDelete, 
           <TitleField key={textbook.title} textbook={textbook} />
           <Menu
             items={[
-              ...(onShare ? [{ label: "Поделиться", icon: <Share2 {...iconProps} />, onSelect: onShare }] : []),
+              ...(share.onShare
+                ? [{ label: "Поделиться", icon: <Share2 {...iconProps} />, onSelect: share.onShare, lockedReason: share.shareLockedReason }]
+                : []),
               {
                 label: "Создать копию",
                 icon: <Copy {...iconProps} />,
