@@ -20,8 +20,8 @@ const iconProps = { size: 18, strokeWidth: 1.75, "aria-hidden": true } as const;
 interface TextbookHeaderProps {
   textbook: Textbook;
   editable: boolean;
-  /** «Поделиться»; empty for someone else's textbook, which can't be shared. */
-  share: Pick<CardActions, "onShare" | "shareLockedReason">;
+  /** «Поделиться»; empty when the textbook has anything of someone else's. */
+  share: Pick<CardActions, "onShare">;
   onMove: () => void;
   onDelete: () => void;
   /** In a learner context: how far the learner has got. */
@@ -61,7 +61,7 @@ export function TextbookHeader({ textbook, editable, share, onMove, onDelete, pr
           <Menu
             items={[
               ...(share.onShare
-                ? [{ label: "Поделиться", icon: <Share2 {...iconProps} />, onSelect: share.onShare, lockedReason: share.shareLockedReason }]
+                ? [{ label: "Поделиться", icon: <Share2 {...iconProps} />, onSelect: share.onShare }]
                 : []),
               {
                 label: "Создать копию",

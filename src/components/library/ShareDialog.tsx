@@ -4,11 +4,11 @@ import { useState } from "react";
 import { ArrowLeft, BookmarkPlus, Eye, Link2 } from "lucide-react";
 import { Button, TextButton } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
-import { Select } from "@/components/ui/Field";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { fieldClass } from "@/components/ui/Field";
 import { toast } from "@/components/ui/Toast";
-import { openShareLink, shareSaves, shareStatus } from "@/lib/domain";
-import { count, formatDate, SAVES } from "@/lib/format";
-import { MIXED_TEXTBOOK_SHARE } from "@/lib/messages";
+import { canShare, openShareLink, shareSaves } from "@/lib/domain";
+import { formatDate } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { AppData, ShareLink, ShareSave } from "@/lib/types";
 import type { CardActions } from "./Cards";
@@ -19,13 +19,6 @@ type Access = "view" | "save";
 const accessOptions = [
   { value: "view" as const, label: "Только просмотр", icon: Eye },
   { value: "save" as const, label: "С сохранением", icon: BookmarkPlus },
-];
-
-/** How many people can save through a new link. */
-type Limit = "1" | "5" | "10" | "25" | "none";
-const limitOptions: { value: Limit; label: string }[] = [
-  ...[1, 5, 10, 25].map((n) => ({ value: String(n) as Limit, label: count(n, SAVES) })),
-  { value: "none", label: "Без ограничений" },
 ];
 
 /** What's left on a link, under it. */
@@ -48,16 +41,9 @@ async function copyToClipboard(link: string): Promise<boolean> {
   }
 }
 
-/** «Поделиться» in a material's menu: hidden for someone else's material, locked for a textbook with their lessons. */
-export function shareAction(
-  data: AppData,
-  kind: ShareTarget["kind"],
-  id: string,
-  onShare: () => void,
-): Pick<CardActions, "onShare" | "shareLockedReason"> {
-  const status = shareStatus(data, kind, id);
-  if (status === "foreign") return {};
-  return { onShare, shareLockedReason: status === "mixed" ? MIXED_TEXTBOOK_SHARE : undefined };
+/** «Поделиться» in a menu: only for the teacher's own work, with nothing of anyone else's inside. */
+export function shareAction(data: AppData, kind: ShareTarget["kind"], id: string, onShare: () => void): Pick<CardActions, "onShare"> {
+  return canShare(data, kind, id) ? { onShare } : {};
 }
 
 interface ShareDialogProps {
@@ -81,7 +67,9 @@ function ShareForm({ target, onClose }: { target: ShareTarget; onClose: () => vo
   const [showSaves, setShowSaves] = useState(false);
   /** «Новая ссылка» goes back to picking a limit; the current link keeps working. */
   const [creating, setCreating] = useState(false);
-  const [limit, setLimit] = useState<Limit>("1");
+  /** How many people can save through a new link: typed or picked with the arrows; one by default. */
+  const [limit, setLimit] = useState("1");
+  const [unlimited, setUnlimited] = useState(false);
   const data = useStore((s) => s.data);
   const createShareLink = useStore((s) => s.createShareLink);
   const saveLink = creating ? undefined : openShareLink(data, target);
@@ -94,7 +82,7 @@ function ShareForm({ target, onClose }: { target: ShareTarget; onClose: () => vo
     if (link && (await copyToClipboard(link))) onClose();
   };
   const create = () => {
-    const token = createShareLink(target, limit === "none" ? null : Number(limit));
+    const token = createShareLink(target, unlimited ? null : Math.max(1, Math.floor(Number(limit)) || 1));
     setCreating(false);
     void copyToClipboard(absolute(saveLinkHref(token)));
   };
@@ -137,17 +125,25 @@ function ShareForm({ target, onClose }: { target: ShareTarget; onClose: () => vo
               Ссылки пока нет
             </div>
           )}
-          {access === "save" && !saveLink && (
-            <Select
-              aria-label="Сколько раз можно сохранить"
-              value={limit}
-              options={limitOptions}
-              allowEmpty={false}
-              onChange={(value) => value && setLimit(value)}
-              className="shrink-0"
-            />
-          )}
         </div>
+        {access === "save" && !saveLink && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <label className="flex items-center gap-2 text-ink-secondary">
+              Сохранений
+              <input
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={unlimited ? "" : limit}
+                disabled={unlimited}
+                onChange={(e) => setLimit(e.target.value)}
+                className={`h-10 border-line-strong ${fieldClass} max-w-20`}
+              />
+            </label>
+            <Checkbox label="Без ограничений" checked={unlimited} onChange={setUnlimited} />
+          </div>
+        )}
         {access === "save" && (
           <div className="flex min-h-5 items-center justify-between gap-3 text-caption text-ink-secondary">
             <span>{saveLink && linkCapacity(saveLink)}</span>

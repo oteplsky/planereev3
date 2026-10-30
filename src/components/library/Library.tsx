@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type DragEvent } from "react";
-import { ArrowRight, BookOpen, Check, FileText, FolderOpen, FolderOutput, SearchX } from "lucide-react";
+import { ArrowRight, BookOpen, FileText, FolderOpen, FolderOutput, SearchX } from "lucide-react";
 import { InLibraryChip } from "@/components/catalog/AddToLibrary";
 import { LessonStatusText } from "@/components/ui/Badge";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
@@ -15,6 +15,7 @@ import { Progress } from "@/components/ui/Progress";
 import { SearchField } from "@/components/ui/SearchField";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { toast } from "@/components/ui/Toast";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { AddFolderTile, AddTile, FolderCard, MATERIAL_GRID, MaterialCard, type ReorderHandlers } from "./Cards";
 import { LibraryDialogs, requestDelete, type DialogState } from "./LibraryDialogs";
 import { FiltersButton, MetaFilterBar, metaFilterCount, useMetaFilters } from "./MetaFilterBar";
@@ -487,27 +488,7 @@ function TypeFilter({ value, onChange }: { value: Filter; onChange: (value: Filt
       {kinds.map((k) => {
         const locked = k.on && kinds.every((o) => o.key === k.key || !o.on);
         return (
-          <label
-            key={k.key}
-            className={`flex h-10 items-center gap-2 rounded-sm px-2 font-medium transition-colors duration-[120ms] ${locked ? "cursor-default" : "cursor-pointer hover:bg-hover"}`}
-          >
-            <input
-              type="checkbox"
-              checked={k.on}
-              disabled={locked}
-              onChange={(e) => toggle(k.key, e.target.checked)}
-              className="peer sr-only"
-            />
-            <span
-              aria-hidden
-              className={`grid size-5 shrink-0 place-items-center rounded-xs border-2 transition-colors duration-[120ms] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus ${
-                k.on ? "border-action bg-action text-white" : "border-line-strong bg-surface"
-              } ${locked ? "opacity-60" : ""}`}
-            >
-              {k.on && <Check size={14} strokeWidth={3} />}
-            </span>
-            {k.label}
-          </label>
+          <Checkbox key={k.key} label={k.label} checked={k.on} disabled={locked} onChange={(on) => toggle(k.key, on)} />
         );
       })}
     </div>

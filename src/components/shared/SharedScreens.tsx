@@ -13,13 +13,11 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { toast } from "@/components/ui/Toast";
 import { MATERIAL_GRID, MaterialCard } from "@/components/library/Cards";
 import {
+  canShare,
   findShareLink,
-  folderPath,
   ownShareSave,
   shareLinkUsedUp,
-  folderTree,
   libraryLocation,
-  shareStatus,
   sharedAuthor,
   sharedLessonAuthor,
   textbookLessonCount,
@@ -27,7 +25,7 @@ import {
 import { contextHref } from "@/lib/context";
 import { useStore } from "@/lib/store";
 import { saveLinkHref, sharedTextbookLessonHref, viewHref } from "@/lib/share";
-import type { AppData, Lesson, ShareLink } from "@/lib/types";
+import type { Lesson, ShareLink } from "@/lib/types";
 import { AuthorLine } from "@/components/library/AuthorLine";
 import type { Crumb } from "@/components/ui/Breadcrumbs";
 
@@ -105,13 +103,11 @@ function SaveLinkGate({ token, children }: { token: string; children: (link: Sha
   return children(link);
 }
 
-// Only own material is shared, even if a link is typed in by hand.
-const isShared = (data: AppData, kind: ShareLink["kind"], id: string) => shareStatus(data, kind, id) === "own";
 
 function TextbookShare({ id, base, action }: { id: string; base: string; action?: ReactNode }) {
   const data = useStore((s) => s.data);
   const textbook = data.textbooks.find((t) => t.id === id);
-  if (!textbook || !isShared(data, "textbook", id)) return <Missing kind="textbook" />;
+  if (!textbook || !canShare(data, "textbook", id)) return <Missing kind="textbook" />;
 
   return (
     <TextbookPreview
@@ -128,7 +124,7 @@ function TextbookLessonShare({ id, lessonId, base, action }: { id: string; lesso
   const data = useStore((s) => s.data);
   const textbook = data.textbooks.find((t) => t.id === id);
   const lesson = data.lessons.find((l) => l.id === lessonId && l.textbookId === id);
-  if (!textbook || !lesson || !isShared(data, "textbook", id)) return <Missing kind="lesson" />;
+  if (!textbook || !lesson || !canShare(data, "textbook", id)) return <Missing kind="lesson" />;
 
   return <LessonPreview lesson={lesson} crumbs={[{ label: textbook.title, href: base }]} action={action} />;
 }
@@ -136,56 +132,42 @@ function TextbookLessonShare({ id, lessonId, base, action }: { id: string; lesso
 function LessonShare({ id, action }: { id: string; action?: ReactNode }) {
   const data = useStore((s) => s.data);
   const lesson = data.lessons.find((l) => l.id === id);
-  if (!lesson || !isShared(data, "lesson", id)) return <Missing kind="lesson" />;
+  if (!lesson || !canShare(data, "lesson", id)) return <Missing kind="lesson" />;
 
   return <LessonPreview lesson={lesson} author={<AuthorLine author={sharedLessonAuthor(data, lesson)} />} action={action} />;
 }
 
-/**
- * A shared folder on one page: its own materials first, then each subfolder's under its path.
- * Materials open their view pages; saving takes the whole folder.
- */
+/** A shared folder: its materials, each opening its view page. Saving takes the whole folder. */
 function FolderShare({ id, action }: { id: string; action?: ReactNode }) {
   const data = useStore((s) => s.data);
-  const tree = folderTree(data, id);
-  if (tree.length === 0 || !isShared(data, "folder", id)) return <Missing kind="folder" />;
-  const depth = folderPath(data, id).length - 1;
+  const folder = data.folders.find((f) => f.id === id);
+  if (!folder || !canShare(data, "folder", id)) return <Missing kind="folder" />;
 
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col items-start gap-2">
-        <h1 className="text-h1">{tree[0].name}</h1>
+        <h1 className="text-h1">{folder.name}</h1>
         <AuthorLine author={{ id: data.teacher.id, name: data.teacher.name }} />
         {action && <div className="mt-3">{action}</div>}
       </header>
 
-      {tree.map((folder) => {
-        const { materials } = libraryLocation(data, folder.id);
-        if (materials.length === 0) return null;
-        const path = folderPath(data, folder.id).slice(depth + 1).map((f) => f.name);
-        return (
-          <section key={folder.id} aria-label={path.join(" / ") || tree[0].name} className="flex flex-col gap-3">
-            {path.length > 0 && <h2 className="text-h3">{path.join(" / ")}</h2>}
-            <div className={MATERIAL_GRID}>
-              {materials.map(({ kind, item }) =>
-                kind === "textbook" ? (
-                  <MaterialCard
-                    key={item.id}
-                    href={viewHref({ kind, id: item.id })}
-                    kind={kind}
-                    title={item.title}
-                    lessonCount={textbookLessonCount(item)}
-                    cover={item.cover}
-                    coverImage={item.coverImage}
-                  />
-                ) : (
-                  <MaterialCard key={item.id} href={viewHref({ kind, id: item.id })} kind={kind} title={item.title} cover={item.cover} />
-                ),
-              )}
-            </div>
-          </section>
-        );
-      })}
+      <div className={MATERIAL_GRID}>
+        {libraryLocation(data, id).materials.map(({ kind, item }) =>
+          kind === "textbook" ? (
+            <MaterialCard
+              key={item.id}
+              href={viewHref({ kind, id: item.id })}
+              kind={kind}
+              title={item.title}
+              lessonCount={textbookLessonCount(item)}
+              cover={item.cover}
+              coverImage={item.coverImage}
+            />
+          ) : (
+            <MaterialCard key={item.id} href={viewHref({ kind, id: item.id })} kind={kind} title={item.title} cover={item.cover} />
+          ),
+        )}
+      </div>
     </div>
   );
 }

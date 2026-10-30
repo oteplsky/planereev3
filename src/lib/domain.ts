@@ -490,22 +490,6 @@ export function folderItemCount(data: AppData, folderId: string): number {
   );
 }
 
-/** The folder and every folder inside it, at any depth; parents before children. */
-export function folderTree(data: AppData, folderId: string): Folder[] {
-  const root = data.folders.find((f) => f.id === folderId);
-  if (!root) return [];
-  return [root, ...data.folders.filter((f) => f.parentFolderId === folderId).flatMap((f) => folderTree(data, f.id))];
-}
-
-/** Every textbook and standalone lesson in the folder, subfolders included. */
-export function folderContents(data: AppData, folderId: string): { textbooks: Textbook[]; lessons: Lesson[] } {
-  const ids = new Set(folderTree(data, folderId).map((f) => f.id));
-  return {
-    textbooks: data.textbooks.filter((t) => t.folderId !== null && ids.has(t.folderId)),
-    lessons: data.lessons.filter((l) => l.textbookId === null && l.folderId !== null && ids.has(l.folderId)),
-  };
-}
-
 /** Deleting a folder never deletes materials: whatever was inside moves to the library root. */
 export function deleteFolder(data: AppData, folderId: string): Result {
   if (!data.folders.some((f) => f.id === folderId)) return { ok: false, reason: "not_found" };
@@ -545,27 +529,18 @@ export function materialAuthor(data: Materials, item: Textbook | Lesson): Author
 }
 
 /**
- * Sharing is for the teacher's own work only. «foreign»: someone else's material (a catalog or saved
- * textbook, a lesson from one) — no «Поделиться» at all. «mixed»: an own textbook with someone else's
- * lessons — «Поделиться» is shown but locked. «own»: both view and save links.
- * A folder is «own» only when everything in it, subfolders included, is; otherwise — or when it holds
- * no materials — it is «foreign».
+ * Sharing is for the teacher's own work only: anything with someone else's material in it — a catalog or
+ * saved textbook, a lesson from one, an own textbook or folder holding them — has no «Поделиться» at all.
+ * An empty folder can't be shared either.
  */
-export type ShareStatus = "own" | "mixed" | "foreign";
-
-export function shareStatus(data: AppData, kind: "lesson" | "textbook" | "folder", id: string): ShareStatus {
+export function canShare(data: AppData, kind: "lesson" | "textbook" | "folder", id: string): boolean {
   if (kind === "folder") {
-    const { textbooks, lessons } = folderContents(data, id);
-    const own =
-      textbooks.length + lessons.length > 0 &&
-      textbooks.every((t) => shareStatus(data, "textbook", t.id) === "own") &&
-      lessons.every((l) => materialAuthor(data, l) === null);
-    return own ? "own" : "foreign";
+    const { materials } = libraryLocation(data, id);
+    return materials.length > 0 && materials.every((m) => canShare(data, m.kind, m.item.id));
   }
   const item = kind === "lesson" ? data.lessons.find((l) => l.id === id) : data.textbooks.find((t) => t.id === id);
-  if (!item || materialAuthor(data, item) !== null) return "foreign";
-  const lessons = kind === "textbook" ? data.lessons.filter((l) => l.textbookId === id) : [];
-  return lessons.every((l) => materialAuthor(data, l) === null) ? "own" : "mixed";
+  if (!item || materialAuthor(data, item) !== null) return false;
+  return kind === "lesson" || data.lessons.filter((l) => l.textbookId === id).every((l) => materialAuthor(data, l) === null);
 }
 
 /** «Источник» filter: the teacher's own materials, or one author's. Null = everything. */
@@ -1009,40 +984,31 @@ export function saveSharedLesson(
 }
 
 /**
- * «Сохранить себе» on a shared folder: the recipient gets the folder, its subfolders and copies of
- * everything in them at the library root, as it is at the moment of saving. Every material is credited
- * to whoever made the original; the folders are just the recipient's folders.
+ * «Сохранить себе» on a shared folder: the recipient gets a folder of the same name at the library root with
+ * copies of everything in it, as it is at the moment of saving. Every material is credited to whoever made it.
  */
 export function saveSharedFolder(data: AppData, folderId: string, now: string): { data: AppData; folderId: string | null } {
-  const tree = folderTree(data, folderId);
-  if (tree.length === 0) return { data, folderId: null };
+  const source = data.folders.find((f) => f.id === folderId);
+  if (!source) return { data, folderId: null };
   const next = clone(data);
-  const folderMap = new Map(tree.map((f) => [f.id, makeId("fld")]));
-  for (const f of tree) {
-    next.folders.push({ id: folderMap.get(f.id)!, name: f.name, parentFolderId: f.id === folderId ? null : folderMap.get(f.parentFolderId!)! });
+  const copyId = makeId("fld");
+  next.folders.push({ id: copyId, name: source.name, parentFolderId: null });
+  for (const { kind, item } of libraryLocation(data, folderId).materials) {
+    if (kind === "textbook") {
+      copyTextbookInto(next, data, item, { folderId: copyId, author: sharedAuthor(data, item), sharedSourceId: item.id, position: item.position }, now);
+    } else {
+      next.lessons.push({
+        ...clone(item),
+        id: makeId("les"),
+        folderId: copyId,
+        content: { blocks: item.content.blocks.map((b) => ({ ...b, id: makeId("blk") })) },
+        author: sharedLessonAuthor(data, item),
+        sharedSourceId: item.id,
+        updatedAt: now,
+      });
+    }
   }
-  const { textbooks, lessons } = folderContents(data, folderId);
-  for (const tb of textbooks) {
-    copyTextbookInto(
-      next,
-      data,
-      tb,
-      { folderId: folderMap.get(tb.folderId!)!, author: sharedAuthor(data, tb), sharedSourceId: tb.id, position: tb.position },
-      now,
-    );
-  }
-  for (const lesson of lessons) {
-    next.lessons.push({
-      ...clone(lesson),
-      id: makeId("les"),
-      folderId: folderMap.get(lesson.folderId!)!,
-      content: { blocks: lesson.content.blocks.map((b) => ({ ...b, id: makeId("blk") })) },
-      author: sharedLessonAuthor(data, lesson),
-      sharedSourceId: lesson.id,
-      updatedAt: now,
-    });
-  }
-  return { data: next, folderId: folderMap.get(folderId)! };
+  return { data: next, folderId: copyId };
 }
 
 /** A link token: 128 random bits, URL-safe. */
