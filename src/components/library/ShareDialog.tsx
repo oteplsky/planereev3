@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, BookmarkPlus, Eye, Link2, RefreshCw } from "lucide-react";
-import { Button, IconButton, textButtonClass } from "@/components/ui/Button";
+import { ArrowLeft, BookmarkPlus, Eye, Link2 } from "lucide-react";
+import { Button, TextButton } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
 import { openShareLink, shareSaves, shareStatus } from "@/lib/domain";
@@ -101,7 +101,7 @@ function ShareForm({ target, onClose }: { target: ShareTarget; onClose: () => vo
       </div>
 
       <div className="flex flex-col gap-2">
-        <div className="flex gap-2">
+        <div className="flex">
           {link ? (
             <input
               readOnly
@@ -115,26 +115,24 @@ function ShareForm({ target, onClose }: { target: ShareTarget; onClose: () => vo
               Ссылки пока нет
             </div>
           )}
-          {access === "save" && saveLink && (
-            <IconButton label="Новая ссылка" onClick={create}>
-              <RefreshCw size={18} strokeWidth={1.75} />
-            </IconButton>
-          )}
         </div>
         {access === "save" && (
           <div className="flex items-center justify-between gap-3 text-caption text-ink-secondary">
             <span>Сработает один раз</span>
             {saves.length > 0 && (
-              <button type="button" onClick={() => setShowSaves(true)} className={textButtonClass}>
-                Сохранили: {saves.length}
-              </button>
+              <TextButton onClick={() => setShowSaves(true)}>Сохранили: {saves.length}</TextButton>
             )}
           </div>
         )}
       </div>
 
-      <div className="mt-2 flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose}>
+      <div className="mt-2 flex items-center gap-2">
+        {access === "save" && saveLink && (
+          <TextButton onClick={create} className="text-caption">
+            Новая ссылка
+          </TextButton>
+        )}
+        <Button variant="ghost" onClick={onClose} className="ml-auto">
           Отмена
         </Button>
         {link ? (
