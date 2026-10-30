@@ -448,6 +448,54 @@ describe("one-time save links", () => {
   });
 });
 
+describe("shared folders", () => {
+  /** «Грамматика» with a subfolder holding one own lesson. */
+  const withSubfolder = () => {
+    const sub = d.createFolder(createDemoData(), "Времена", "fld_grammar");
+    const lesson = d.createLesson(sub.data, "Past Simple", { folderId: sub.folderId }, T1);
+    return { data: lesson.data, subId: sub.folderId, lessonId: lesson.lessonId };
+  };
+
+  it("can be shared only when everything inside, subfolders included, is the teacher's own", () => {
+    const { data, subId } = withSubfolder();
+    expect(d.shareStatus(data, "folder", "fld_grammar")).toBe("own");
+
+    const cat = d.addTextbookFromCatalog(data, catalog, "cat_speaking_club", T1);
+    const foreign = d.moveMaterial(cat.data, "textbook", cat.textbookId!, subId);
+    expect(d.shareStatus(foreign, "folder", "fld_grammar")).toBe("foreign");
+
+    const own = cat.data.textbooks.find((t) => t.id === "tb_grammar_a2")!;
+    expect(own.folderId).toBe("fld_grammar");
+    const catLesson = cat.data.lessons.find((l) => l.textbookId === cat.textbookId)!.id;
+    const mixed = d.moveLessonToTextbook(cat.data, catLesson, own.id, own.useSections ? own.sections[0].id : null, T2);
+    expect(d.shareStatus(mixed, "folder", "fld_grammar")).toBe("foreign");
+
+    const empty = d.createFolder(data, "Пусто", null);
+    expect(d.shareStatus(empty.data, "folder", empty.folderId)).toBe("foreign");
+  });
+
+  it("saves the folder tree at the root with credited copies of everything inside", () => {
+    const { data, subId } = withSubfolder();
+    const before = d.folderContents(data, "fld_grammar");
+    const created = d.createShareLink(data, { kind: "folder", id: "fld_grammar" }, T1);
+    const saved = d.saveFromShareLink(created.data, created.token, T2);
+    const copyId = saved.copyId!;
+
+    expect(saved.data.folders.find((f) => f.id === copyId)).toMatchObject({ name: "Грамматика", parentFolderId: null });
+    const subCopy = saved.data.folders.find((f) => f.parentFolderId === copyId)!;
+    expect(subCopy.name).toBe("Времена");
+    expect(subCopy.id).not.toBe(subId);
+
+    const after = d.folderContents(saved.data, copyId);
+    expect(after.textbooks).toHaveLength(before.textbooks.length);
+    expect(after.lessons).toHaveLength(before.lessons.length);
+    expect(after.lessons.map((l) => l.sharedSourceId).sort()).toEqual(before.lessons.map((l) => l.id).sort());
+    expect([...after.textbooks, ...after.lessons].every((m) => d.materialAuthor(saved.data, m)?.id === data.teacher.id)).toBe(true);
+    expect(d.shareStatus(saved.data, "folder", copyId)).toBe("foreign");
+    expect(d.saveFromShareLink(saved.data, created.token, T3).copyId).toBeNull();
+  });
+});
+
 describe("someone else's lessons", () => {
   const withCatalogTextbook = () => {
     const r = d.addTextbookFromCatalog(createDemoData(), catalog, "cat_speaking_club", T1);

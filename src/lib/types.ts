@@ -166,7 +166,7 @@ export interface HomeworkAssignment {
  */
 export interface ShareLink {
   token: string;
-  kind: "textbook" | "lesson";
+  kind: "textbook" | "lesson" | "folder";
   materialId: string;
   createdAt: string;
   /** The Planeree account that saved through the link. Unset = not used yet. */

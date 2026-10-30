@@ -61,7 +61,7 @@ interface Store {
   /** Returns the new textbook's id in the teacher's library. */
   addTextbookFromCatalog(catalogTextbookId: string): string | null;
   /** A new one-time «С сохранением» link. Returns its token. */
-  createShareLink(target: { kind: Kind; id: string }): string;
+  createShareLink(target: { kind: Kind | "folder"; id: string }): string;
   /** «Сохранить себе» through a one-time link. Returns the copy's id; null once the link is used. */
   saveFromShareLink(token: string): string | null;
   deleteMaterial(kind: Kind, id: string): Outcome;

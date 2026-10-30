@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { BookmarkPlus, BookX, FileX, Link2Off } from "lucide-react";
+import { BookmarkPlus, BookX, FileX, FolderX, Link2Off } from "lucide-react";
 import { InLibraryChip } from "@/components/catalog/AddToLibrary";
 import { BlockView } from "@/components/lesson/LessonBlocks";
 import { TextbookPreview } from "@/components/textbook/TextbookPreview";
@@ -11,7 +11,18 @@ import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Button, buttonClass } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { toast } from "@/components/ui/Toast";
-import { findShareLink, shareStatus, sharedAuthor, sharedLessonAuthor } from "@/lib/domain";
+import { MATERIAL_GRID, MaterialCard } from "@/components/library/Cards";
+import {
+  findShareLink,
+  folderPath,
+  folderTree,
+  libraryLocation,
+  shareStatus,
+  sharedAuthor,
+  sharedLessonAuthor,
+  textbookLessonCount,
+} from "@/lib/domain";
+import { contextHref } from "@/lib/context";
 import { useStore } from "@/lib/store";
 import { saveLinkHref, sharedTextbookLessonHref, viewHref } from "@/lib/share";
 import type { AppData, Lesson, ShareLink } from "@/lib/types";
@@ -36,6 +47,12 @@ export function SharedStandaloneLessonScreen() {
   return <LessonShare id={id} />;
 }
 
+/** A folder opened from a «Только просмотр» link. */
+export function SharedFolderScreen() {
+  const { id } = useParams<{ id: string }>();
+  return <FolderShare id={id} />;
+}
+
 /** A one-time «С сохранением» link: the material with «Сохранить себе», until someone else has used it. */
 export function SaveLinkScreen() {
   const { token } = useParams<{ token: string }>();
@@ -44,6 +61,8 @@ export function SaveLinkScreen() {
       {(link) =>
         link.kind === "textbook" ? (
           <TextbookShare id={link.materialId} base={saveLinkHref(link.token)} action={<SaveFromLink link={link} />} />
+        ) : link.kind === "folder" ? (
+          <FolderShare id={link.materialId} action={<SaveFromLink link={link} />} />
         ) : (
           <LessonShare id={link.materialId} action={<SaveFromLink link={link} />} />
         )
@@ -85,7 +104,7 @@ function SaveLinkGate({ token, children }: { token: string; children: (link: Sha
 }
 
 // Only own material is shared, even if a link is typed in by hand.
-const isShared = (data: AppData, kind: "textbook" | "lesson", id: string) => shareStatus(data, kind, id) === "own";
+const isShared = (data: AppData, kind: ShareLink["kind"], id: string) => shareStatus(data, kind, id) === "own";
 
 function TextbookShare({ id, base, action }: { id: string; base: string; action?: ReactNode }) {
   const data = useStore((s) => s.data);
@@ -120,6 +139,55 @@ function LessonShare({ id, action }: { id: string; action?: ReactNode }) {
   return <LessonPreview lesson={lesson} author={<AuthorLine author={sharedLessonAuthor(data, lesson)} />} action={action} />;
 }
 
+/**
+ * A shared folder on one page: its own materials first, then each subfolder's under its path.
+ * Materials open their view pages; saving takes the whole folder.
+ */
+function FolderShare({ id, action }: { id: string; action?: ReactNode }) {
+  const data = useStore((s) => s.data);
+  const tree = folderTree(data, id);
+  if (tree.length === 0 || !isShared(data, "folder", id)) return <Missing kind="folder" />;
+  const depth = folderPath(data, id).length - 1;
+
+  return (
+    <div className="flex flex-col gap-8">
+      <header className="flex flex-col items-start gap-2">
+        <h1 className="text-h1">{tree[0].name}</h1>
+        <AuthorLine author={{ id: data.teacher.id, name: data.teacher.name }} />
+        {action && <div className="mt-3">{action}</div>}
+      </header>
+
+      {tree.map((folder) => {
+        const { materials } = libraryLocation(data, folder.id);
+        if (materials.length === 0) return null;
+        const path = folderPath(data, folder.id).slice(depth + 1).map((f) => f.name);
+        return (
+          <section key={folder.id} aria-label={path.join(" / ") || tree[0].name} className="flex flex-col gap-3">
+            {path.length > 0 && <h2 className="text-h3">{path.join(" / ")}</h2>}
+            <div className={MATERIAL_GRID}>
+              {materials.map(({ kind, item }) =>
+                kind === "textbook" ? (
+                  <MaterialCard
+                    key={item.id}
+                    href={viewHref({ kind, id: item.id })}
+                    kind={kind}
+                    title={item.title}
+                    lessonCount={textbookLessonCount(item)}
+                    cover={item.cover}
+                    coverImage={item.coverImage}
+                  />
+                ) : (
+                  <MaterialCard key={item.id} href={viewHref({ kind, id: item.id })} kind={kind} title={item.title} cover={item.cover} />
+                ),
+              )}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
 function LessonPreview({ lesson, crumbs, author, action }: { lesson: Lesson; crumbs?: Crumb[]; author?: ReactNode; action?: ReactNode }) {
   return (
     <div className="flex flex-col gap-8">
@@ -145,10 +213,14 @@ function LessonPreview({ lesson, crumbs, author, action }: { lesson: Lesson; cru
 function SaveFromLink({ link }: { link: ShareLink }) {
   const router = useRouter();
   const copyExists = useStore((s) =>
-    link.kind === "textbook" ? s.data.textbooks.some((t) => t.id === link.copyId) : s.data.lessons.some((l) => l.id === link.copyId),
+    link.kind === "textbook"
+      ? s.data.textbooks.some((t) => t.id === link.copyId)
+      : link.kind === "folder"
+        ? s.data.folders.some((f) => f.id === link.copyId)
+        : s.data.lessons.some((l) => l.id === link.copyId),
   );
   const save = useStore((s) => s.saveFromShareLink);
-  const href = (id: string) => `/${link.kind}/${id}`;
+  const href = (id: string) => (link.kind === "folder" ? contextHref("/library", null, { folder: id }) : `/${link.kind}/${id}`);
 
   if (link.savedBy) {
     return (
@@ -177,12 +249,13 @@ function SaveFromLink({ link }: { link: ShareLink }) {
   );
 }
 
-function Missing({ kind }: { kind: "textbook" | "lesson" }) {
-  return (
-    <EmptyState
-      icon={kind === "textbook" ? <BookX size={28} strokeWidth={1.5} aria-hidden /> : <FileX size={28} strokeWidth={1.5} aria-hidden />}
-      title={kind === "textbook" ? "Учебник не найден" : "Урок не найден"}
-      description="Возможно, автор его удалил."
-    />
-  );
+const missing = {
+  textbook: { icon: BookX, title: "Учебник не найден", description: "Возможно, автор его удалил." },
+  lesson: { icon: FileX, title: "Урок не найден", description: "Возможно, автор его удалил." },
+  folder: { icon: FolderX, title: "Папка не найдена", description: "Возможно, автор её удалил." },
+};
+
+function Missing({ kind }: { kind: ShareLink["kind"] }) {
+  const { icon: Icon, title, description } = missing[kind];
+  return <EmptyState icon={<Icon size={28} strokeWidth={1.5} aria-hidden />} title={title} description={description} />;
 }

@@ -15,7 +15,7 @@ import { Progress } from "@/components/ui/Progress";
 import { SearchField } from "@/components/ui/SearchField";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { toast } from "@/components/ui/Toast";
-import { AddFolderTile, AddTile, FolderCard, MaterialCard, type ReorderHandlers } from "./Cards";
+import { AddFolderTile, AddTile, FolderCard, MATERIAL_GRID, MaterialCard, type ReorderHandlers } from "./Cards";
 import { LibraryDialogs, requestDelete, type DialogState } from "./LibraryDialogs";
 import { FiltersButton, MetaFilterBar, metaFilterCount, useMetaFilters } from "./MetaFilterBar";
 import { catalog } from "@/lib/catalog";
@@ -280,6 +280,9 @@ export function Library({ learner, folderId }: LibraryProps) {
                   editable
                     ? {
                         onRename: () => setDialog({ type: "rename", target: { kind: "folder", id: f.id, title: f.name } }),
+                        ...shareAction(data, "folder", f.id, () =>
+                          setDialog({ type: "share", target: { kind: "folder", id: f.id, title: f.name } }),
+                        ),
                         onDelete: () => setDialog(requestDelete(data, { kind: "folder", id: f.id, title: f.name })),
                       }
                     : undefined
@@ -357,7 +360,7 @@ export function Library({ learner, folderId }: LibraryProps) {
           ) : (textbooks.length + lessons.length > 0 || (editable && !isFiltering) || sourceSwitch) && (
             <div>
               {sourceControl || (searching && <SectionLabel label="Результаты поиска" />)}
-              <div className={GRID} {...gridDrop}>
+              <div className={MATERIAL_GRID} {...gridDrop}>
                 {editable && !isFiltering && <AddMaterial onSelect={(kind) => setDialog({ type: "create", kind })} />}
                 {materials.map(renderMaterial)}
               </div>
@@ -431,7 +434,7 @@ function CatalogMaterials({ query, meta, filter, learnerId }: { query: string; m
     return <EmptyState icon={<SearchX size={28} strokeWidth={1.5} aria-hidden />} title="Ничего не нашли" />;
   }
   return (
-    <div className={GRID}>
+    <div className={MATERIAL_GRID}>
       {textbooks.map((t) => (
         <MaterialCard
           key={t.id}
@@ -511,7 +514,6 @@ function TypeFilter({ value, onChange }: { value: Filter; onChange: (value: Filt
   );
 }
 
-const GRID = "grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4";
 const FOLDER_GRID = "mb-4 grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3";
 
 export function SectionLabel({ label, count }: { label: string; count?: number }) {

@@ -1,7 +1,7 @@
 // Shared links (prototype): «Поделиться» gives one out, /shared/… opens it.
 
-/** What «Поделиться» shares: a textbook, or one lesson (standalone or from a textbook). */
-export type ShareTarget = { kind: "textbook" | "lesson"; id: string };
+/** What «Поделиться» shares: a folder, a textbook, or one lesson (standalone or from a textbook). */
+export type ShareTarget = { kind: "textbook" | "lesson" | "folder"; id: string };
 
 /** «Только просмотр»: one open link per material. */
 export function viewHref({ kind, id }: ShareTarget) {

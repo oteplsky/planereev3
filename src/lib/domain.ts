@@ -489,6 +489,22 @@ export function folderItemCount(data: AppData, folderId: string): number {
   );
 }
 
+/** The folder and every folder inside it, at any depth; parents before children. */
+export function folderTree(data: AppData, folderId: string): Folder[] {
+  const root = data.folders.find((f) => f.id === folderId);
+  if (!root) return [];
+  return [root, ...data.folders.filter((f) => f.parentFolderId === folderId).flatMap((f) => folderTree(data, f.id))];
+}
+
+/** Every textbook and standalone lesson in the folder, subfolders included. */
+export function folderContents(data: AppData, folderId: string): { textbooks: Textbook[]; lessons: Lesson[] } {
+  const ids = new Set(folderTree(data, folderId).map((f) => f.id));
+  return {
+    textbooks: data.textbooks.filter((t) => t.folderId !== null && ids.has(t.folderId)),
+    lessons: data.lessons.filter((l) => l.textbookId === null && l.folderId !== null && ids.has(l.folderId)),
+  };
+}
+
 /** Deleting a folder never deletes materials: whatever was inside moves to the library root. */
 export function deleteFolder(data: AppData, folderId: string): Result {
   if (!data.folders.some((f) => f.id === folderId)) return { ok: false, reason: "not_found" };
@@ -531,10 +547,20 @@ export function materialAuthor(data: Materials, item: Textbook | Lesson): Author
  * Sharing is for the teacher's own work only. «foreign»: someone else's material (a catalog or saved
  * textbook, a lesson from one) — no «Поделиться» at all. «mixed»: an own textbook with someone else's
  * lessons — «Поделиться» is shown but locked. «own»: both view and save links.
+ * A folder is «own» only when everything in it, subfolders included, is; otherwise — or when it holds
+ * no materials — it is «foreign».
  */
 export type ShareStatus = "own" | "mixed" | "foreign";
 
-export function shareStatus(data: AppData, kind: "lesson" | "textbook", id: string): ShareStatus {
+export function shareStatus(data: AppData, kind: "lesson" | "textbook" | "folder", id: string): ShareStatus {
+  if (kind === "folder") {
+    const { textbooks, lessons } = folderContents(data, id);
+    const own =
+      textbooks.length + lessons.length > 0 &&
+      textbooks.every((t) => shareStatus(data, "textbook", t.id) === "own") &&
+      lessons.every((l) => materialAuthor(data, l) === null);
+    return own ? "own" : "foreign";
+  }
   const item = kind === "lesson" ? data.lessons.find((l) => l.id === id) : data.textbooks.find((t) => t.id === id);
   if (!item || materialAuthor(data, item) !== null) return "foreign";
   const lessons = kind === "textbook" ? data.lessons.filter((l) => l.textbookId === id) : [];
@@ -973,6 +999,43 @@ export function saveSharedLesson(
   return { data: next, lessonId: copyId };
 }
 
+/**
+ * «Сохранить себе» on a shared folder: the recipient gets the folder, its subfolders and copies of
+ * everything in them at the library root, as it is at the moment of saving. Every material is credited
+ * to whoever made the original; the folders are just the recipient's folders.
+ */
+export function saveSharedFolder(data: AppData, folderId: string, now: string): { data: AppData; folderId: string | null } {
+  const tree = folderTree(data, folderId);
+  if (tree.length === 0) return { data, folderId: null };
+  const next = clone(data);
+  const folderMap = new Map(tree.map((f) => [f.id, makeId("fld")]));
+  for (const f of tree) {
+    next.folders.push({ id: folderMap.get(f.id)!, name: f.name, parentFolderId: f.id === folderId ? null : folderMap.get(f.parentFolderId!)! });
+  }
+  const { textbooks, lessons } = folderContents(data, folderId);
+  for (const tb of textbooks) {
+    copyTextbookInto(
+      next,
+      data,
+      tb,
+      { folderId: folderMap.get(tb.folderId!)!, author: sharedAuthor(data, tb), sharedSourceId: tb.id, position: tb.position },
+      now,
+    );
+  }
+  for (const lesson of lessons) {
+    next.lessons.push({
+      ...clone(lesson),
+      id: makeId("les"),
+      folderId: folderMap.get(lesson.folderId!)!,
+      content: { blocks: lesson.content.blocks.map((b) => ({ ...b, id: makeId("blk") })) },
+      author: sharedLessonAuthor(data, lesson),
+      sharedSourceId: lesson.id,
+      updatedAt: now,
+    });
+  }
+  return { data: next, folderId: folderMap.get(folderId)! };
+}
+
 /** A link token: 128 random bits, URL-safe. */
 function makeToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -982,7 +1045,7 @@ function makeToken(): string {
 /** «Создать ссылку» / «Новая ссылка»: a fresh one-time save link. Older unused links keep working. */
 export function createShareLink(
   data: AppData,
-  target: { kind: "textbook" | "lesson"; id: string },
+  target: { kind: ShareLink["kind"]; id: string },
   now: string,
 ): { data: AppData; token: string } {
   const token = makeToken();
@@ -995,18 +1058,18 @@ export function findShareLink(data: AppData, token: string): ShareLink | undefin
   return data.shareLinks.find((l) => l.token === token);
 }
 
-const linksFor = (data: AppData, target: { kind: "textbook" | "lesson"; id: string }) =>
+const linksFor = (data: AppData, target: { kind: ShareLink["kind"]; id: string }) =>
   data.shareLinks
     .filter((l) => l.kind === target.kind && l.materialId === target.id)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
 /** The link the share dialog shows: the newest one nobody has saved through yet. */
-export function openShareLink(data: AppData, target: { kind: "textbook" | "lesson"; id: string }): ShareLink | undefined {
+export function openShareLink(data: AppData, target: { kind: ShareLink["kind"]; id: string }): ShareLink | undefined {
   return linksFor(data, target).find((l) => !l.savedBy);
 }
 
 /** Who saved the material through its links, newest first. */
-export function shareSaves(data: AppData, target: { kind: "textbook" | "lesson"; id: string }): ShareLink[] {
+export function shareSaves(data: AppData, target: { kind: ShareLink["kind"]; id: string }): ShareLink[] {
   return linksFor(data, target)
     .filter((l) => l.savedBy)
     .sort((a, b) => b.savedAt!.localeCompare(a.savedAt!));
@@ -1022,6 +1085,7 @@ export function saveFromShareLink(data: AppData, token: string, now: string): { 
   let next: AppData;
   let copyId: string | null;
   if (link.kind === "textbook") ({ data: next, textbookId: copyId } = saveSharedTextbook(data, link.materialId, now));
+  else if (link.kind === "folder") ({ data: next, folderId: copyId } = saveSharedFolder(data, link.materialId, now));
   else ({ data: next, lessonId: copyId } = saveSharedLesson(data, link.materialId, now));
   if (!copyId) return { data, copyId: null };
   const used = next.shareLinks.find((l) => l.token === token)!;

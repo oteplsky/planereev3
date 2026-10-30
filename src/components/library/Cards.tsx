@@ -123,6 +123,9 @@ export const AddTile = forwardRef<HTMLButtonElement, AddTileProps>(function AddT
   );
 });
 
+/** The library's material grid: cards with covers, two columns on phones. */
+export const MATERIAL_GRID = "grid grid-cols-2 gap-4 sm:grid-cols-[repeat(auto-fill,minmax(168px,1fr))]";
+
 interface MaterialCardProps {
   href: string;
   kind: "lesson" | "textbook";

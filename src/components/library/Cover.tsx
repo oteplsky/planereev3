@@ -50,39 +50,39 @@ export function Cover({ cover, kind, image }: CoverProps) {
   if (image) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- a local data URL, nothing to optimise
-      <img src={image} alt="" className="block aspect-[16/10] w-full rounded-t-lg object-cover" />
+      <img src={image} alt="" className="block aspect-[3/4] w-full rounded-t-lg object-cover" />
     );
   }
   if (!cover) {
     const Icon = kind === "textbook" ? BookOpen : FileText;
     return (
-      <div className="m-1.5 mb-0 grid aspect-[16/10] place-items-center rounded-md border border-dashed border-line-strong bg-light text-ink-secondary">
+      <div className="m-1.5 mb-0 grid aspect-[3/4] place-items-center rounded-md border border-dashed border-line-strong bg-light text-ink-secondary">
         <Icon size={28} strokeWidth={1.5} aria-hidden />
       </div>
     );
   }
 
   return (
-    <div className={`relative aspect-[16/10] overflow-hidden rounded-t-lg ${coverBg[cover]}`} aria-hidden>
-      <svg viewBox="0 0 320 200" preserveAspectRatio="none" className="absolute inset-0 size-full">
+    <div className={`relative aspect-[3/4] overflow-hidden rounded-t-lg ${coverBg[cover]}`} aria-hidden>
+      <svg viewBox="0 0 300 400" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 size-full">
         <path
-          d="M-10 150 C 60 90, 120 190, 190 130 S 290 60, 340 100"
+          d="M-20 290 C 60 220, 120 350, 200 280 S 290 200, 330 235"
           fill="none"
-          strokeWidth="22"
+          strokeWidth="26"
           strokeLinecap="round"
           className={ribbonSoft[cover]}
           stroke="currentColor"
         />
         <path
-          d="M-10 70 C 70 20, 130 120, 200 70 S 300 10, 340 40"
+          d="M-20 150 C 60 80, 130 220, 205 145 S 295 70, 330 100"
           fill="none"
-          strokeWidth="22"
+          strokeWidth="26"
           strokeLinecap="round"
           className={ribbonStrong[cover]}
           stroke="currentColor"
         />
       </svg>
-      <span className="absolute right-[12%] bottom-[14%] aspect-square w-[11%] rounded-full bg-lime" />
+      <span className="absolute right-[14%] bottom-[10%] aspect-square w-[13%] rounded-full bg-lime" />
       {kind === "textbook" && (
         <span className="absolute inset-y-0 left-0 w-2.5 bg-neutral-950/10" />
       )}

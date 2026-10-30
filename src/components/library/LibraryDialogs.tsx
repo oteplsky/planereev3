@@ -24,7 +24,7 @@ export type DialogState =
   | { type: "delete"; target: Target }
   | { type: "blocked"; reason: BlockReason; title?: string; description?: string }
   | { type: "move"; target: Target & { kind: "lesson" | "textbook" } }
-  | { type: "share"; target: Target & { kind: "lesson" | "textbook" } }
+  | { type: "share"; target: Target }
   | { type: "moveToTextbook"; target: Target & { kind: "lesson" } };
 
 /** What deleting a material removes, and — when learners worked with it — that their copies stay. */
