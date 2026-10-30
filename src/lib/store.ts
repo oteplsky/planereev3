@@ -60,9 +60,9 @@ interface Store {
   duplicateMaterial(kind: Kind, id: string): string;
   /** Returns the new textbook's id in the teacher's library. */
   addTextbookFromCatalog(catalogTextbookId: string): string | null;
-  /** A new one-time «С сохранением» link. Returns its token. */
-  createShareLink(target: { kind: Kind | "folder"; id: string }): string;
-  /** «Сохранить себе» through a one-time link. Returns the copy's id; null once the link is used. */
+  /** A new «С сохранением» link for `limit` saves (null = no limit). Returns its token. */
+  createShareLink(target: { kind: Kind | "folder"; id: string }, limit: number | null): string;
+  /** «Сохранить себе» through a link. Returns the copy's id; null once the link is used up. */
   saveFromShareLink(token: string): string | null;
   deleteMaterial(kind: Kind, id: string): Outcome;
 
@@ -160,8 +160,8 @@ export const useStore = create<Store>()(
           commit(r.data);
           return r.textbookId;
         },
-        createShareLink(target) {
-          const r = d.createShareLink(data(), target, now());
+        createShareLink(target, limit) {
+          const r = d.createShareLink(data(), target, limit, now());
           commit(r.data);
           return r.token;
         },

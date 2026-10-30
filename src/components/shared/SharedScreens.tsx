@@ -15,6 +15,8 @@ import { MATERIAL_GRID, MaterialCard } from "@/components/library/Cards";
 import {
   findShareLink,
   folderPath,
+  ownShareSave,
+  shareLinkUsedUp,
   folderTree,
   libraryLocation,
   shareStatus,
@@ -92,12 +94,12 @@ export function SaveLinkLessonScreen() {
   );
 }
 
-/** Someone else's used link shows nothing of the material. The person who saved through it can still open it. */
+/** A used-up link shows nothing of the material, except to those who saved through it. */
 function SaveLinkGate({ token, children }: { token: string; children: (link: ShareLink) => ReactNode }) {
   const data = useStore((s) => s.data);
   const link = findShareLink(data, token);
   if (!link) return <EmptyState icon={<Link2Off size={28} strokeWidth={1.5} aria-hidden />} title="Ссылка не найдена" />;
-  if (link.savedBy && link.savedBy.id !== data.teacher.id) {
+  if (shareLinkUsedUp(link) && !ownShareSave(data, link)) {
     return <EmptyState icon={<Link2Off size={28} strokeWidth={1.5} aria-hidden />} title="Ссылка уже использована" />;
   }
   return children(link);
@@ -212,22 +214,24 @@ function LessonPreview({ lesson, crumbs, author, action }: { lesson: Lesson; cru
 /** «Сохранить себе», or — once saved through this link — where the copy is. */
 function SaveFromLink({ link }: { link: ShareLink }) {
   const router = useRouter();
-  const copyExists = useStore((s) =>
+  const data = useStore((s) => s.data);
+  const saved = ownShareSave(data, link);
+  const copyId = saved?.copyId;
+  const copyExists =
     link.kind === "textbook"
-      ? s.data.textbooks.some((t) => t.id === link.copyId)
+      ? data.textbooks.some((t) => t.id === copyId)
       : link.kind === "folder"
-        ? s.data.folders.some((f) => f.id === link.copyId)
-        : s.data.lessons.some((l) => l.id === link.copyId),
-  );
+        ? data.folders.some((f) => f.id === copyId)
+        : data.lessons.some((l) => l.id === copyId);
   const save = useStore((s) => s.saveFromShareLink);
   const href = (id: string) => (link.kind === "folder" ? contextHref("/library", null, { folder: id }) : `/${link.kind}/${id}`);
 
-  if (link.savedBy) {
+  if (saved) {
     return (
       <div className="flex flex-wrap items-center gap-3">
         <InLibraryChip />
         {copyExists && (
-          <Link href={href(link.copyId!)} className={buttonClass("secondary")}>
+          <Link href={href(copyId!)} className={buttonClass("secondary")}>
             Открыть в библиотеке
           </Link>
         )}
@@ -240,8 +244,8 @@ function SaveFromLink({ link }: { link: ShareLink }) {
       variant="primary"
       icon={<BookmarkPlus size={20} strokeWidth={1.75} aria-hidden />}
       onClick={() => {
-        const copyId = save(link.token);
-        if (copyId) toast("Сохранено в библиотеку", { label: "Открыть", onClick: () => router.push(href(copyId)) });
+        const newCopyId = save(link.token);
+        if (newCopyId) toast("Сохранено в библиотеку", { label: "Открыть", onClick: () => router.push(href(newCopyId)) });
       }}
     >
       Сохранить себе

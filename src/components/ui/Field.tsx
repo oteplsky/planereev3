@@ -131,9 +131,16 @@ export function Select<T extends string>({
   onChange,
   invalid,
   highlighted,
+  allowEmpty = true,
   className = "",
   ...props
-}: Omit<SelectFieldProps<T>, "label" | "hint" | "error"> & { invalid?: boolean; /** Active filter look. */ highlighted?: boolean }) {
+}: Omit<SelectFieldProps<T>, "label" | "hint" | "error"> & {
+  invalid?: boolean;
+  /** Active filter look. */
+  highlighted?: boolean;
+  /** False when there is always a value: no empty placeholder option. */
+  allowEmpty?: boolean;
+}) {
   return (
     <span className={`relative block ${className}`}>
       <select
@@ -145,7 +152,7 @@ export function Select<T extends string>({
         }`}
         {...props}
       >
-        <option value="">{placeholder}</option>
+        {allowEmpty && <option value="">{placeholder}</option>}
         {options.map((o) => (
           <option key={o.value} value={o.value} className="text-ink">
             {o.label}

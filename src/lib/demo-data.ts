@@ -661,10 +661,10 @@ const learners: AppData["learners"] = [
 
 /** Two sales of the grammar textbook, already saved by the buyers. */
 const shareLinks: ShareLink[] = [
-  { token: "dGx0OmRlbW8tc2FsZS0x", kind: "textbook", materialId: gpa, createdAt: "2026-10-20T09:12:00.000Z",
-    savedBy: { id: "acc_olga", name: "Ольга Смирнова" }, savedAt: "2026-10-20T18:40:00.000Z" },
-  { token: "dGx0OmRlbW8tc2FsZS0y", kind: "textbook", materialId: gpa, createdAt: "2026-10-26T11:05:00.000Z",
-    savedBy: { id: "acc_denis", name: "Денис Орлов" }, savedAt: "2026-10-26T12:30:00.000Z" },
+  { token: "dGx0OmRlbW8tc2FsZS0x", kind: "textbook", materialId: gpa, createdAt: "2026-10-20T09:12:00.000Z", limit: 1,
+    saves: [{ by: { id: "acc_olga", name: "Ольга Смирнова" }, at: "2026-10-20T18:40:00.000Z" }] },
+  { token: "dGx0OmRlbW8tc2FsZS0y", kind: "textbook", materialId: gpa, createdAt: "2026-10-26T11:05:00.000Z", limit: 1,
+    saves: [{ by: { id: "acc_denis", name: "Денис Орлов" }, at: "2026-10-26T12:30:00.000Z" }] },
 ];
 
 export function createDemoData(): AppData {

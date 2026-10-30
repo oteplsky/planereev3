@@ -4,12 +4,13 @@ import { useState } from "react";
 import { ArrowLeft, BookmarkPlus, Eye, Link2 } from "lucide-react";
 import { Button, TextButton } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
+import { Select } from "@/components/ui/Field";
 import { toast } from "@/components/ui/Toast";
 import { openShareLink, shareSaves, shareStatus } from "@/lib/domain";
-import { formatDate } from "@/lib/format";
+import { count, formatDate, SAVES } from "@/lib/format";
 import { MIXED_TEXTBOOK_SHARE } from "@/lib/messages";
 import { useStore } from "@/lib/store";
-import type { AppData, ShareLink } from "@/lib/types";
+import type { AppData, ShareLink, ShareSave } from "@/lib/types";
 import type { CardActions } from "./Cards";
 import { saveLinkHref, viewHref, type ShareTarget } from "@/lib/share";
 
@@ -19,6 +20,20 @@ const accessOptions = [
   { value: "view" as const, label: "Только просмотр", icon: Eye },
   { value: "save" as const, label: "С сохранением", icon: BookmarkPlus },
 ];
+
+/** How many people can save through a new link. */
+type Limit = "1" | "5" | "10" | "25" | "none";
+const limitOptions: { value: Limit; label: string }[] = [
+  ...[1, 5, 10, 25].map((n) => ({ value: String(n) as Limit, label: count(n, SAVES) })),
+  { value: "none", label: "Без ограничений" },
+];
+
+/** What's left on a link, under it. */
+function linkCapacity(link: ShareLink): string {
+  if (link.limit === null) return "Без ограничений";
+  if (link.limit === 1) return "Сработает один раз";
+  return `Осталось ${link.limit - link.saves.length} из ${link.limit}`;
+}
 
 const absolute = (href: string) => `${typeof window === "undefined" ? "" : window.location.origin}${href}`;
 
@@ -51,7 +66,7 @@ interface ShareDialogProps {
   target: (ShareTarget & { title: string }) | null;
 }
 
-/** «Поделиться»: an open view link, or one-time links that let one person save a copy each. */
+/** «Поделиться»: an open view link, or save links for a chosen number of saves (one by default). */
 export function ShareDialog({ open, onClose, target }: ShareDialogProps) {
   return (
     <Dialog open={open} onClose={onClose} title={target ? `Поделиться «${target.title}»` : ""}>
@@ -64,9 +79,12 @@ export function ShareDialog({ open, onClose, target }: ShareDialogProps) {
 function ShareForm({ target, onClose }: { target: ShareTarget; onClose: () => void }) {
   const [access, setAccess] = useState<Access>("view");
   const [showSaves, setShowSaves] = useState(false);
+  /** «Новая ссылка» goes back to picking a limit; the current link keeps working. */
+  const [creating, setCreating] = useState(false);
+  const [limit, setLimit] = useState<Limit>("1");
   const data = useStore((s) => s.data);
   const createShareLink = useStore((s) => s.createShareLink);
-  const saveLink = openShareLink(data, target);
+  const saveLink = creating ? undefined : openShareLink(data, target);
   const saves = shareSaves(data, target);
 
   if (showSaves) return <Saves saves={saves} onBack={() => setShowSaves(false)} />;
@@ -75,7 +93,11 @@ function ShareForm({ target, onClose }: { target: ShareTarget; onClose: () => vo
   const copy = async () => {
     if (link && (await copyToClipboard(link))) onClose();
   };
-  const create = () => void copyToClipboard(absolute(saveLinkHref(createShareLink(target))));
+  const create = () => {
+    const token = createShareLink(target, limit === "none" ? null : Number(limit));
+    setCreating(false);
+    void copyToClipboard(absolute(saveLinkHref(token)));
+  };
 
   return (
     <div className="mt-4 flex flex-col gap-4 text-ink">
@@ -101,7 +123,7 @@ function ShareForm({ target, onClose }: { target: ShareTarget; onClose: () => vo
       </div>
 
       <div className="flex flex-col gap-2">
-        <div className="flex">
+        <div className="flex gap-2">
           {link ? (
             <input
               readOnly
@@ -115,10 +137,20 @@ function ShareForm({ target, onClose }: { target: ShareTarget; onClose: () => vo
               Ссылки пока нет
             </div>
           )}
+          {access === "save" && !saveLink && (
+            <Select
+              aria-label="Сколько раз можно сохранить"
+              value={limit}
+              options={limitOptions}
+              allowEmpty={false}
+              onChange={(value) => value && setLimit(value)}
+              className="shrink-0"
+            />
+          )}
         </div>
         {access === "save" && (
-          <div className="flex items-center justify-between gap-3 text-caption text-ink-secondary">
-            <span>Сработает один раз</span>
+          <div className="flex min-h-5 items-center justify-between gap-3 text-caption text-ink-secondary">
+            <span>{saveLink && linkCapacity(saveLink)}</span>
             {saves.length > 0 && (
               <TextButton onClick={() => setShowSaves(true)}>Сохранили: {saves.length}</TextButton>
             )}
@@ -128,7 +160,7 @@ function ShareForm({ target, onClose }: { target: ShareTarget; onClose: () => vo
 
       <div className="mt-2 flex items-center gap-2">
         {access === "save" && saveLink && (
-          <TextButton onClick={create} className="text-caption">
+          <TextButton onClick={() => setCreating(true)} className="text-caption">
             Новая ссылка
           </TextButton>
         )}
@@ -149,15 +181,15 @@ function ShareForm({ target, onClose }: { target: ShareTarget; onClose: () => vo
   );
 }
 
-/** «Сохранили: N»: whose libraries the material went to through its one-time links. */
-function Saves({ saves, onBack }: { saves: ShareLink[]; onBack: () => void }) {
+/** «Сохранили: N»: whose libraries the material went to through its links. */
+function Saves({ saves, onBack }: { saves: ShareSave[]; onBack: () => void }) {
   return (
     <div className="mt-4 flex flex-col gap-4 text-ink">
       <ul className="flex flex-col divide-y divide-line">
-        {saves.map((link) => (
-          <li key={link.token} className="flex items-center justify-between gap-3 py-2.5">
-            <span className="truncate font-semibold">{link.savedBy!.name}</span>
-            <span className="shrink-0 text-ink-secondary">{formatDate(link.savedAt!)}</span>
+        {saves.map((save) => (
+          <li key={`${save.by.id}-${save.at}`} className="flex items-center justify-between gap-3 py-2.5">
+            <span className="truncate font-semibold">{save.by.name}</span>
+            <span className="shrink-0 text-ink-secondary">{formatDate(save.at)}</span>
           </li>
         ))}
       </ul>

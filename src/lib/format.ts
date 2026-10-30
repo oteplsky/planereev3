@@ -13,6 +13,7 @@ export const LESSONS: [string, string, string] = ["урок", "урока", "у�
 export const TEXTBOOKS: [string, string, string] = ["учебник", "учебника", "учебников"];
 export const MATERIALS: [string, string, string] = ["материал", "материала", "материалов"];
 export const MEMBERS: [string, string, string] = ["участник", "участника", "участников"];
+export const SAVES: [string, string, string] = ["сохранение", "сохранения", "сохранений"];
 
 const dayMonth = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 const dayMonthYear = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" });
