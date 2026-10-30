@@ -387,7 +387,6 @@ describe("shared textbooks", () => {
     expect(copy.folderId).toBeNull();
     expect(copy.author).toEqual(d.sharedAuthor(data, data.textbooks.find((t) => t.id === "tb_grammar_a2")!));
     expect(d.libraryLocation(r.data, null).materials[0].item.id).toBe(copy.id);
-    expect(d.textbookFromShare(r.data, "tb_grammar_a2")?.id).toBe(copy.id);
     expect(d.textbookLessonCount(copy)).toBe(d.textbookLessonCount(data.textbooks.find((t) => t.id === "tb_grammar_a2")!));
     expect(r.data.lessons.filter((l) => l.textbookId === copy.id).every((l) => !data.lessons.some((o) => o.id === l.id))).toBe(true);
   });
@@ -401,8 +400,51 @@ describe("shared lessons", () => {
     expect(copy).toMatchObject({ textbookId: null, folderId: null, sharedSourceId: PS });
     expect(d.materialAuthor(r.data, copy)).toEqual(d.sharedLessonAuthor(data, data.lessons.find((l) => l.id === PS)!));
     expect(d.libraryLocation(r.data, null).materials[0].item.id).toBe(copy.id);
-    expect(d.lessonFromShare(r.data, PS)?.id).toBe(copy.id);
     expect(d.libraryAuthors(r.data).some((a) => a.id === copy.author!.id)).toBe(true);
+  });
+});
+
+describe("one-time save links", () => {
+  const TB = { kind: "textbook" as const, id: "tb_grammar_a2" };
+
+  it("saves once, for whoever uses it first", () => {
+    const created = d.createShareLink(createDemoData(), TB, T1);
+    expect(d.openShareLink(created.data, TB)?.token).toBe(created.token);
+    expect(created.token).not.toContain(TB.id);
+
+    const saved = d.saveFromShareLink(created.data, created.token, T2);
+    const link = d.findShareLink(saved.data, created.token)!;
+    expect(link).toMatchObject({ savedBy: { id: "teacher" }, savedAt: T2, copyId: saved.copyId });
+    expect(saved.data.textbooks.find((t) => t.id === saved.copyId)?.sharedSourceId).toBe(TB.id);
+    expect(d.openShareLink(saved.data, TB)).toBeUndefined();
+
+    const again = d.saveFromShareLink(saved.data, created.token, T3);
+    expect(again.copyId).toBeNull();
+    expect(again.data.textbooks).toHaveLength(saved.data.textbooks.length);
+  });
+
+  it("a new link leaves older unused ones working", () => {
+    const first = d.createShareLink(createDemoData(), TB, T1);
+    const second = d.createShareLink(first.data, TB, T2);
+    expect(second.token).not.toBe(first.token);
+    expect(d.openShareLink(second.data, TB)?.token).toBe(second.token);
+    expect(d.saveFromShareLink(second.data, first.token, T3).copyId).not.toBeNull();
+  });
+
+  it("lists who saved, newest first", () => {
+    const data = createDemoData();
+    const before = d.shareSaves(data, TB).length;
+    const created = d.createShareLink(data, TB, T1);
+    const saves = d.shareSaves(d.saveFromShareLink(created.data, created.token, "2099-01-01T00:00:00.000Z").data, TB);
+    expect(saves).toHaveLength(before + 1);
+    expect(saves[0].savedBy?.name).toBe(data.teacher.name);
+  });
+
+  it("saves a single lesson as a standalone copy", () => {
+    const target = { kind: "lesson" as const, id: PS };
+    const created = d.createShareLink(createDemoData(), target, T1);
+    const saved = d.saveFromShareLink(created.data, created.token, T2);
+    expect(saved.data.lessons.find((l) => l.id === saved.copyId)).toMatchObject({ textbookId: null, sharedSourceId: PS });
   });
 });
 

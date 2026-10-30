@@ -1,23 +1,37 @@
 "use client";
 
 import { useState } from "react";
-import { BookmarkPlus, Eye, Link2 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { ArrowLeft, BookmarkPlus, Eye, Link2, RefreshCw } from "lucide-react";
+import { Button, IconButton, textButtonClass } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
 import { toast } from "@/components/ui/Toast";
-import { shareStatus } from "@/lib/domain";
+import { openShareLink, shareSaves, shareStatus } from "@/lib/domain";
+import { formatDate } from "@/lib/format";
 import { MIXED_TEXTBOOK_SHARE } from "@/lib/messages";
-import type { AppData } from "@/lib/types";
+import { useStore } from "@/lib/store";
+import type { AppData, ShareLink } from "@/lib/types";
 import type { CardActions } from "./Cards";
-import { sharedHref, type ShareAccess, type ShareTarget } from "@/lib/share";
+import { saveLinkHref, viewHref, type ShareTarget } from "@/lib/share";
+
+type Access = "view" | "save";
 
 const accessOptions = [
   { value: "view" as const, label: "Только просмотр", icon: Eye },
   { value: "save" as const, label: "С сохранением", icon: BookmarkPlus },
 ];
 
-const shareLink = (target: ShareTarget, access: ShareAccess) =>
-  `${typeof window === "undefined" ? "" : window.location.origin}${sharedHref(target, access)}`;
+const absolute = (href: string) => `${typeof window === "undefined" ? "" : window.location.origin}${href}`;
+
+async function copyToClipboard(link: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(link);
+    toast("Ссылка скопирована");
+    return true;
+  } catch {
+    toast("Не удалось скопировать ссылку");
+    return false;
+  }
+}
 
 /** «Поделиться» in a material's menu: hidden for someone else's material, locked for a textbook with their lessons. */
 export function shareAction(
@@ -37,29 +51,31 @@ interface ShareDialogProps {
   target: (ShareTarget & { title: string }) | null;
 }
 
-/** «Поделиться»: pick what the recipient can do, then copy the link. */
+/** «Поделиться»: an open view link, or one-time links that let one person save a copy each. */
 export function ShareDialog({ open, onClose, target }: ShareDialogProps) {
   return (
     <Dialog open={open} onClose={onClose} title={target ? `Поделиться «${target.title}»` : ""}>
       {/* Remount per open so every share starts from «Только просмотр». */}
-      {open && target && <ShareForm target={target} onClose={onClose} />}
+      {open && target && <ShareForm target={{ kind: target.kind, id: target.id }} onClose={onClose} />}
     </Dialog>
   );
 }
 
 function ShareForm({ target, onClose }: { target: ShareTarget; onClose: () => void }) {
-  const [access, setAccess] = useState<ShareAccess>("view");
-  const link = shareLink({ kind: target.kind, id: target.id }, access);
+  const [access, setAccess] = useState<Access>("view");
+  const [showSaves, setShowSaves] = useState(false);
+  const data = useStore((s) => s.data);
+  const createShareLink = useStore((s) => s.createShareLink);
+  const saveLink = openShareLink(data, target);
+  const saves = shareSaves(data, target);
 
+  if (showSaves) return <Saves saves={saves} onBack={() => setShowSaves(false)} />;
+
+  const link = access === "view" ? absolute(viewHref(target)) : saveLink && absolute(saveLinkHref(saveLink.token));
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(link);
-      toast("Ссылка скопирована");
-      onClose();
-    } catch {
-      toast("Не удалось скопировать ссылку");
-    }
+    if (link && (await copyToClipboard(link))) onClose();
   };
+  const create = () => void copyToClipboard(absolute(saveLinkHref(createShareLink(target))));
 
   return (
     <div className="mt-4 flex flex-col gap-4 text-ink">
@@ -84,20 +100,72 @@ function ShareForm({ target, onClose }: { target: ShareTarget; onClose: () => vo
         })}
       </div>
 
-      <input
-        readOnly
-        value={link}
-        aria-label="Ссылка"
-        onFocus={(e) => e.currentTarget.select()}
-        className="h-10 w-full truncate rounded-sm border border-line-strong bg-light px-3 text-ink-secondary outline-none focus:border-action"
-      />
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-2">
+          {link ? (
+            <input
+              readOnly
+              value={link}
+              aria-label="Ссылка"
+              onFocus={(e) => e.currentTarget.select()}
+              className="h-10 min-w-0 flex-1 truncate rounded-sm border border-line-strong bg-light px-3 text-ink-secondary outline-none focus:border-action"
+            />
+          ) : (
+            <div className="flex h-10 flex-1 items-center rounded-sm border border-dashed border-line-strong px-3 text-ink-secondary">
+              Ссылки пока нет
+            </div>
+          )}
+          {access === "save" && saveLink && (
+            <IconButton label="Новая ссылка" onClick={create}>
+              <RefreshCw size={18} strokeWidth={1.75} />
+            </IconButton>
+          )}
+        </div>
+        {access === "save" && (
+          <div className="flex items-center justify-between gap-3 text-caption text-ink-secondary">
+            <span>Сработает один раз</span>
+            {saves.length > 0 && (
+              <button type="button" onClick={() => setShowSaves(true)} className={textButtonClass}>
+                Сохранили: {saves.length}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="mt-2 flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose}>
           Отмена
         </Button>
-        <Button variant="primary" icon={<Link2 size={18} strokeWidth={1.75} aria-hidden />} onClick={copy}>
-          Скопировать ссылку
+        {link ? (
+          <Button variant="primary" icon={<Link2 size={18} strokeWidth={1.75} aria-hidden />} onClick={copy}>
+            Скопировать ссылку
+          </Button>
+        ) : (
+          <Button variant="primary" icon={<Link2 size={18} strokeWidth={1.75} aria-hidden />} onClick={create}>
+            Создать ссылку
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** «Сохранили: N»: whose libraries the material went to through its one-time links. */
+function Saves({ saves, onBack }: { saves: ShareLink[]; onBack: () => void }) {
+  return (
+    <div className="mt-4 flex flex-col gap-4 text-ink">
+      <ul className="flex flex-col divide-y divide-line">
+        {saves.map((link) => (
+          <li key={link.token} className="flex items-center justify-between gap-3 py-2.5">
+            <span className="truncate font-semibold">{link.savedBy!.name}</span>
+            <span className="shrink-0 text-ink-secondary">{formatDate(link.savedAt!)}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-2 flex justify-start">
+        <Button variant="ghost" icon={<ArrowLeft size={18} strokeWidth={1.75} aria-hidden />} onClick={onBack}>
+          Назад
         </Button>
       </div>
     </div>

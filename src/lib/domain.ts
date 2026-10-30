@@ -16,6 +16,7 @@ import type {
   LessonSession,
   MockLessonContent,
   Result,
+  ShareLink,
   Textbook,
 } from "./types";
 import { matchesFilters, migrateMeta, normalizeMeta, sortLevels, type Level, type MaterialMeta, type MetaFilters, noFilters } from "./meta";
@@ -597,6 +598,7 @@ export function migrateData(data: AppData): AppData {
   const migrated: AppData = {
     ...data,
     learnerLessons: data.learnerLessons.map((ll) => ({ ...ll, title: ll.title ?? null })),
+    shareLinks: data.shareLinks ?? [],
     textbooks: data.textbooks.map((t) => ({
       ...t,
       meta: migrateMeta(t.meta),
@@ -971,14 +973,60 @@ export function saveSharedLesson(
   return { data: next, lessonId: copyId };
 }
 
-/** The recipient's saved copy of a shared lesson, if they have saved it. */
-export function lessonFromShare(data: AppData, sharedLessonId: string): Lesson | undefined {
-  return data.lessons.find((l) => l.sharedSourceId === sharedLessonId);
+/** A link token: 128 random bits, URL-safe. */
+function makeToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-/** The recipient's saved copy of a shared textbook, if they have saved it. */
-export function textbookFromShare(data: AppData, sharedTextbookId: string): Textbook | undefined {
-  return data.textbooks.find((t) => t.sharedSourceId === sharedTextbookId);
+/** «Создать ссылку» / «Новая ссылка»: a fresh one-time save link. Older unused links keep working. */
+export function createShareLink(
+  data: AppData,
+  target: { kind: "textbook" | "lesson"; id: string },
+  now: string,
+): { data: AppData; token: string } {
+  const token = makeToken();
+  const next = clone(data);
+  next.shareLinks.push({ token, kind: target.kind, materialId: target.id, createdAt: now });
+  return { data: next, token };
+}
+
+export function findShareLink(data: AppData, token: string): ShareLink | undefined {
+  return data.shareLinks.find((l) => l.token === token);
+}
+
+const linksFor = (data: AppData, target: { kind: "textbook" | "lesson"; id: string }) =>
+  data.shareLinks
+    .filter((l) => l.kind === target.kind && l.materialId === target.id)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+/** The link the share dialog shows: the newest one nobody has saved through yet. */
+export function openShareLink(data: AppData, target: { kind: "textbook" | "lesson"; id: string }): ShareLink | undefined {
+  return linksFor(data, target).find((l) => !l.savedBy);
+}
+
+/** Who saved the material through its links, newest first. */
+export function shareSaves(data: AppData, target: { kind: "textbook" | "lesson"; id: string }): ShareLink[] {
+  return linksFor(data, target)
+    .filter((l) => l.savedBy)
+    .sort((a, b) => b.savedAt!.localeCompare(a.savedAt!));
+}
+
+/**
+ * «Сохранить себе» through a one-time link: the copy goes to whoever is signed in, and the link is used up.
+ * A used link saves nothing more.
+ */
+export function saveFromShareLink(data: AppData, token: string, now: string): { data: AppData; copyId: string | null } {
+  const link = findShareLink(data, token);
+  if (!link || link.savedBy) return { data, copyId: null };
+  let next: AppData;
+  let copyId: string | null;
+  if (link.kind === "textbook") ({ data: next, textbookId: copyId } = saveSharedTextbook(data, link.materialId, now));
+  else ({ data: next, lessonId: copyId } = saveSharedLesson(data, link.materialId, now));
+  if (!copyId) return { data, copyId: null };
+  const used = next.shareLinks.find((l) => l.token === token)!;
+  Object.assign(used, { savedBy: { id: data.teacher.id, name: data.teacher.name }, savedAt: now, copyId });
+  return { data: next, copyId };
 }
 
 /** The teacher's copy of a catalog textbook, if they have added it. */

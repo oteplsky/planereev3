@@ -60,9 +60,10 @@ interface Store {
   duplicateMaterial(kind: Kind, id: string): string;
   /** Returns the new textbook's id in the teacher's library. */
   addTextbookFromCatalog(catalogTextbookId: string): string | null;
-  /** «Сохранить себе» from a shared link. Returns the copy's id. */
-  saveSharedTextbook(textbookId: string): string | null;
-  saveSharedLesson(lessonId: string): string | null;
+  /** A new one-time «С сохранением» link. Returns its token. */
+  createShareLink(target: { kind: Kind; id: string }): string;
+  /** «Сохранить себе» through a one-time link. Returns the copy's id; null once the link is used. */
+  saveFromShareLink(token: string): string | null;
   deleteMaterial(kind: Kind, id: string): Outcome;
 
   // Textbook structure
@@ -159,15 +160,15 @@ export const useStore = create<Store>()(
           commit(r.data);
           return r.textbookId;
         },
-        saveSharedTextbook(textbookId) {
-          const r = d.saveSharedTextbook(data(), textbookId, now());
+        createShareLink(target) {
+          const r = d.createShareLink(data(), target, now());
           commit(r.data);
-          return r.textbookId;
+          return r.token;
         },
-        saveSharedLesson(lessonId) {
-          const r = d.saveSharedLesson(data(), lessonId, now());
+        saveFromShareLink(token) {
+          const r = d.saveFromShareLink(data(), token, now());
           commit(r.data);
-          return r.lessonId;
+          return r.copyId;
         },
         deleteMaterial: (kind, id) =>
           apply(kind === "lesson" ? d.deleteLesson(data(), id) : d.deleteTextbook(data(), id)),

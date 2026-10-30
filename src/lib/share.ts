@@ -1,17 +1,19 @@
 // Shared links (prototype): «Поделиться» gives one out, /shared/… opens it.
 
-/** What a shared link lets the recipient do. */
-export type ShareAccess = "view" | "save";
-
 /** What «Поделиться» shares: a textbook, or one lesson (standalone or from a textbook). */
 export type ShareTarget = { kind: "textbook" | "lesson"; id: string };
 
-/** The link «Поделиться» gives out. */
-export function sharedHref({ kind, id }: ShareTarget, access: ShareAccess) {
-  return `/shared/${kind}/${id}?access=${access}`;
+/** «Только просмотр»: one open link per material. */
+export function viewHref({ kind, id }: ShareTarget) {
+  return `/shared/${kind}/${id}`;
 }
 
-/** A lesson opened from a shared textbook stays inside that share. */
-export function sharedTextbookLessonHref(textbookId: string, lessonId: string, access: ShareAccess) {
-  return `/shared/textbook/${textbookId}/lesson/${lessonId}?access=${access}`;
+/** «С сохранением»: a one-time link, by token. */
+export function saveLinkHref(token: string) {
+  return `/shared/s/${token}`;
+}
+
+/** A lesson opened from a shared textbook stays inside that share: `base` is the textbook's link. */
+export function sharedTextbookLessonHref(base: string, lessonId: string) {
+  return `${base}/lesson/${lessonId}`;
 }

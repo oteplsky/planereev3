@@ -160,6 +160,22 @@ export interface HomeworkAssignment {
   reviewedAt: string | null;
 }
 
+/**
+ * A «С сохранением» link. It works for one save; after that only the person who saved can reopen it.
+ * The URL carries just the random token, so links can't be guessed from material ids.
+ */
+export interface ShareLink {
+  token: string;
+  kind: "textbook" | "lesson";
+  materialId: string;
+  createdAt: string;
+  /** The Planeree account that saved through the link. Unset = not used yet. */
+  savedBy?: Author;
+  savedAt?: string;
+  /** The saved copy, when it is in this library. */
+  copyId?: string;
+}
+
 export interface AppData {
   teacher: Teacher;
   learners: Learner[];
@@ -169,6 +185,7 @@ export interface AppData {
   learnerLessons: LearnerLesson[];
   sessions: LessonSession[];
   homework: HomeworkAssignment[];
+  shareLinks: ShareLink[];
 }
 
 /** Why a requested change was refused. The UI maps these to Russian messages. */

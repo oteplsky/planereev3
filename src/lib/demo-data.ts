@@ -8,6 +8,7 @@ import type {
   Lesson,
   LessonBlock,
   LessonSession,
+  ShareLink,
   Textbook,
 } from "./types";
 import type { AgeGroup, Level } from "./meta";
@@ -658,6 +659,14 @@ const learners: AppData["learners"] = [
     email: "artur.kim@mail.ru", schedule: ["Вторник, 19:00"], lessonsLeft: 9 }),
 ];
 
+/** Two sales of the grammar textbook, already saved by the buyers. */
+const shareLinks: ShareLink[] = [
+  { token: "dGx0OmRlbW8tc2FsZS0x", kind: "textbook", materialId: gpa, createdAt: "2026-10-20T09:12:00.000Z",
+    savedBy: { id: "acc_olga", name: "Ольга Смирнова" }, savedAt: "2026-10-20T18:40:00.000Z" },
+  { token: "dGx0OmRlbW8tc2FsZS0y", kind: "textbook", materialId: gpa, createdAt: "2026-10-26T11:05:00.000Z",
+    savedBy: { id: "acc_denis", name: "Денис Орлов" }, savedAt: "2026-10-26T12:30:00.000Z" },
+];
+
 export function createDemoData(): AppData {
   return structuredClone({
     teacher: { id: "teacher", name: "Мария Иванова" },
@@ -668,6 +677,7 @@ export function createDemoData(): AppData {
     learnerLessons: [...learnerLessons, ...longHistories.flatMap((h) => h.learnerLessons)],
     sessions: [...sessions, ...longHistories.flatMap((h) => h.sessions)],
     homework: [...homeworkAssignments, ...longHistories.flatMap((h) => h.homework)],
+    shareLinks,
   });
 }
 
@@ -682,5 +692,6 @@ export function createEmptyData(): AppData {
     learnerLessons: [],
     sessions: [],
     homework: [],
+    shareLinks: [],
   };
 }

@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { BookmarkPlus, BookX, FileX } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { BookmarkPlus, BookX, FileX, Link2Off } from "lucide-react";
 import { InLibraryChip } from "@/components/catalog/AddToLibrary";
 import { BlockView } from "@/components/lesson/LessonBlocks";
 import { TextbookPreview } from "@/components/textbook/TextbookPreview";
@@ -11,72 +11,113 @@ import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Button, buttonClass } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { toast } from "@/components/ui/Toast";
-import { lessonFromShare, shareStatus, sharedAuthor, sharedLessonAuthor, textbookFromShare } from "@/lib/domain";
+import { findShareLink, shareStatus, sharedAuthor, sharedLessonAuthor } from "@/lib/domain";
 import { useStore } from "@/lib/store";
-import { sharedHref, sharedTextbookLessonHref, type ShareAccess, type ShareTarget } from "@/lib/share";
-import type { Lesson } from "@/lib/types";
+import { saveLinkHref, sharedTextbookLessonHref, viewHref } from "@/lib/share";
+import type { AppData, Lesson, ShareLink } from "@/lib/types";
 import { AuthorLine } from "@/components/library/AuthorLine";
 import type { Crumb } from "@/components/ui/Breadcrumbs";
 
-/** Prototype: anything but an explicit «save» link is view-only. */
-function useAccess(): ShareAccess {
-  return useSearchParams().get("access") === "save" ? "save" : "view";
-}
-
-/** A textbook opened from a shared link. Read-only; a «С сохранением» link also lets the recipient keep a copy. */
+/** A textbook opened from a «Только просмотр» link. */
 export function SharedTextbookScreen() {
   const { id } = useParams<{ id: string }>();
-  const access = useAccess();
+  return <TextbookShare id={id} base={viewHref({ kind: "textbook", id })} />;
+}
+
+/** One lesson of a textbook opened from a «Только просмотр» link. */
+export function SharedLessonScreen() {
+  const { id, lessonId } = useParams<{ id: string; lessonId: string }>();
+  return <TextbookLessonShare id={id} lessonId={lessonId} base={viewHref({ kind: "textbook", id })} />;
+}
+
+/** One lesson shared on its own with a «Только просмотр» link, wherever it sits in the sender's library. */
+export function SharedStandaloneLessonScreen() {
+  const { id } = useParams<{ id: string }>();
+  return <LessonShare id={id} />;
+}
+
+/** A one-time «С сохранением» link: the material with «Сохранить себе», until someone else has used it. */
+export function SaveLinkScreen() {
+  const { token } = useParams<{ token: string }>();
+  return (
+    <SaveLinkGate token={token}>
+      {(link) =>
+        link.kind === "textbook" ? (
+          <TextbookShare id={link.materialId} base={saveLinkHref(link.token)} action={<SaveFromLink link={link} />} />
+        ) : (
+          <LessonShare id={link.materialId} action={<SaveFromLink link={link} />} />
+        )
+      }
+    </SaveLinkGate>
+  );
+}
+
+/** One lesson of a textbook opened from a one-time link. Saving takes the whole textbook. */
+export function SaveLinkLessonScreen() {
+  const { token, lessonId } = useParams<{ token: string; lessonId: string }>();
+  return (
+    <SaveLinkGate token={token}>
+      {(link) =>
+        link.kind === "textbook" ? (
+          <TextbookLessonShare
+            id={link.materialId}
+            lessonId={lessonId}
+            base={saveLinkHref(link.token)}
+            action={<SaveFromLink link={link} />}
+          />
+        ) : (
+          <Missing kind="lesson" />
+        )
+      }
+    </SaveLinkGate>
+  );
+}
+
+/** Someone else's used link shows nothing of the material. The person who saved through it can still open it. */
+function SaveLinkGate({ token, children }: { token: string; children: (link: ShareLink) => ReactNode }) {
+  const data = useStore((s) => s.data);
+  const link = findShareLink(data, token);
+  if (!link) return <EmptyState icon={<Link2Off size={28} strokeWidth={1.5} aria-hidden />} title="Ссылка не найдена" />;
+  if (link.savedBy && link.savedBy.id !== data.teacher.id) {
+    return <EmptyState icon={<Link2Off size={28} strokeWidth={1.5} aria-hidden />} title="Ссылка уже использована" />;
+  }
+  return children(link);
+}
+
+// Only own material is shared, even if a link is typed in by hand.
+const isShared = (data: AppData, kind: "textbook" | "lesson", id: string) => shareStatus(data, kind, id) === "own";
+
+function TextbookShare({ id, base, action }: { id: string; base: string; action?: ReactNode }) {
   const data = useStore((s) => s.data);
   const textbook = data.textbooks.find((t) => t.id === id);
-  // Only own material is shared, even if the link is typed in by hand.
-  if (!textbook || shareStatus(data, "textbook", id) !== "own") return <Missing kind="textbook" />;
+  if (!textbook || !isShared(data, "textbook", id)) return <Missing kind="textbook" />;
 
   return (
     <TextbookPreview
       materials={data}
       textbook={textbook}
       author={sharedAuthor(data, textbook)}
-      action={access === "save" && <SaveShared target={{ kind: "textbook", id: textbook.id }} />}
-      lessonHref={(lesson) => sharedTextbookLessonHref(textbook.id, lesson.id, access)}
+      action={action}
+      lessonHref={(lesson) => sharedTextbookLessonHref(base, lesson.id)}
     />
   );
 }
 
-/** One lesson of a shared textbook. Saving takes the whole textbook. */
-export function SharedLessonScreen() {
-  const { id, lessonId } = useParams<{ id: string; lessonId: string }>();
-  const access = useAccess();
+function TextbookLessonShare({ id, lessonId, base, action }: { id: string; lessonId: string; base: string; action?: ReactNode }) {
   const data = useStore((s) => s.data);
   const textbook = data.textbooks.find((t) => t.id === id);
   const lesson = data.lessons.find((l) => l.id === lessonId && l.textbookId === id);
-  if (!textbook || !lesson || shareStatus(data, "textbook", id) !== "own") return <Missing kind="lesson" />;
+  if (!textbook || !lesson || !isShared(data, "textbook", id)) return <Missing kind="lesson" />;
 
-  return (
-    <LessonPreview
-      lesson={lesson}
-      crumbs={[{ label: textbook.title, href: sharedHref({ kind: "textbook", id: textbook.id }, access) }]}
-      action={access === "save" && <SaveShared target={{ kind: "textbook", id: textbook.id }} />}
-    />
-  );
+  return <LessonPreview lesson={lesson} crumbs={[{ label: textbook.title, href: base }]} action={action} />;
 }
 
-/** One lesson shared on its own, wherever it sits in the sender's library. */
-export function SharedStandaloneLessonScreen() {
-  const { id } = useParams<{ id: string }>();
-  const access = useAccess();
+function LessonShare({ id, action }: { id: string; action?: ReactNode }) {
   const data = useStore((s) => s.data);
   const lesson = data.lessons.find((l) => l.id === id);
+  if (!lesson || !isShared(data, "lesson", id)) return <Missing kind="lesson" />;
 
-  if (!lesson || shareStatus(data, "lesson", id) !== "own") return <Missing kind="lesson" />;
-
-  return (
-    <LessonPreview
-      lesson={lesson}
-      author={<AuthorLine author={sharedLessonAuthor(data, lesson)} />}
-      action={access === "save" && <SaveShared target={{ kind: "lesson", id: lesson.id }} />}
-    />
-  );
+  return <LessonPreview lesson={lesson} author={<AuthorLine author={sharedLessonAuthor(data, lesson)} />} action={action} />;
 }
 
 function LessonPreview({ lesson, crumbs, author, action }: { lesson: Lesson; crumbs?: Crumb[]; author?: ReactNode; action?: ReactNode }) {
@@ -100,21 +141,24 @@ function LessonPreview({ lesson, crumbs, author, action }: { lesson: Lesson; cru
   );
 }
 
-/** «Сохранить себе», or — once saved — where the copy is. */
-function SaveShared({ target }: { target: ShareTarget }) {
+/** «Сохранить себе», or — once saved through this link — where the copy is. */
+function SaveFromLink({ link }: { link: ShareLink }) {
   const router = useRouter();
-  const copy = useStore((s) => (target.kind === "textbook" ? textbookFromShare(s.data, target.id) : lessonFromShare(s.data, target.id)));
-  const saveTextbook = useStore((s) => s.saveSharedTextbook);
-  const saveLesson = useStore((s) => s.saveSharedLesson);
-  const href = (id: string) => `/${target.kind}/${id}`;
+  const copyExists = useStore((s) =>
+    link.kind === "textbook" ? s.data.textbooks.some((t) => t.id === link.copyId) : s.data.lessons.some((l) => l.id === link.copyId),
+  );
+  const save = useStore((s) => s.saveFromShareLink);
+  const href = (id: string) => `/${link.kind}/${id}`;
 
-  if (copy) {
+  if (link.savedBy) {
     return (
       <div className="flex flex-wrap items-center gap-3">
         <InLibraryChip />
-        <Link href={href(copy.id)} className={buttonClass("secondary")}>
-          Открыть в библиотеке
-        </Link>
+        {copyExists && (
+          <Link href={href(link.copyId!)} className={buttonClass("secondary")}>
+            Открыть в библиотеке
+          </Link>
+        )}
       </div>
     );
   }
@@ -124,7 +168,7 @@ function SaveShared({ target }: { target: ShareTarget }) {
       variant="primary"
       icon={<BookmarkPlus size={20} strokeWidth={1.75} aria-hidden />}
       onClick={() => {
-        const copyId = target.kind === "textbook" ? saveTextbook(target.id) : saveLesson(target.id);
+        const copyId = save(link.token);
         if (copyId) toast("Сохранено в библиотеку", { label: "Открыть", onClick: () => router.push(href(copyId)) });
       }}
     >
