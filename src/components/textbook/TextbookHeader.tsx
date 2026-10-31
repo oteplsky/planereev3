@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Camera, Copy, Ellipsis, FolderInput, Share2, Trash2, X } from "lucide-react";
+import { Camera, Copy, Ellipsis, FolderInput, Settings2, Share2, Trash2, X } from "lucide-react";
 import { AuthorLine } from "@/components/library/AuthorLine";
 import type { CardActions } from "@/components/library/Cards";
 import { Cover } from "@/components/library/Cover";
@@ -10,10 +10,10 @@ import { Menu } from "@/components/ui/Menu";
 import { Progress } from "@/components/ui/Progress";
 import { toast } from "@/components/ui/Toast";
 import type { TextbookProgress } from "@/lib/domain";
-import { metaSummary } from "@/lib/meta";
+import { metaParts } from "@/lib/meta";
 import { useStore } from "@/lib/store";
 import type { Textbook } from "@/lib/types";
-import { MetaFields } from "./MetaFields";
+import { TextbookDetailsDialog } from "./TextbookDetailsDialog";
 
 const iconProps = { size: 18, strokeWidth: 1.75, "aria-hidden": true } as const;
 
@@ -28,13 +28,17 @@ interface TextbookHeaderProps {
   progress?: TextbookProgress | null;
 }
 
-/** Cover, title, description and metadata. In the global context every field is edited in place and saved at once. */
+/**
+ * Cover, title, metadata and description. In the global context the cover and title are edited in
+ * place; the rest lives in «Настройки учебника», the same form the textbook was created with.
+ */
 export function TextbookHeader({ textbook, editable, share, onMove, onDelete, progress }: TextbookHeaderProps) {
   const duplicateMaterial = useStore((s) => s.duplicateMaterial);
   const updateTextbookDetails = useStore((s) => s.updateTextbookDetails);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const openSettings = () => setSettingsOpen(true);
 
   if (!editable) {
-    const summary = metaSummary(textbook.meta);
     return (
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
         <div className="w-40 shrink-0 overflow-hidden rounded-lg border border-line sm:w-48">
@@ -43,7 +47,7 @@ export function TextbookHeader({ textbook, editable, share, onMove, onDelete, pr
         <div className="min-w-0 flex-1">
           <h1 className="text-h1">{textbook.title}</h1>
           <AuthorLine author={textbook.author} className="mt-2" />
-          {summary && <p className="mt-2 font-semibold text-ink-secondary">{summary}</p>}
+          <MetaChips textbook={textbook} className="mt-3" />
           {textbook.description && <p className="mt-3 max-w-2xl whitespace-pre-line">{textbook.description}</p>}
           {progress && <Progress value={progress.completed} total={progress.total} className="mt-4 max-w-xs" />}
         </div>
@@ -60,6 +64,7 @@ export function TextbookHeader({ textbook, editable, share, onMove, onDelete, pr
           <TitleField key={textbook.title} textbook={textbook} />
           <Menu
             items={[
+              { label: "Настройки учебника", icon: <Settings2 {...iconProps} />, onSelect: openSettings },
               ...(share.onShare
                 ? [{ label: "Поделиться", icon: <Share2 {...iconProps} />, onSelect: share.onShare }]
                 : []),
@@ -82,15 +87,41 @@ export function TextbookHeader({ textbook, editable, share, onMove, onDelete, pr
           />
         </div>
         <AuthorLine author={textbook.author} className="-mt-2" />
-        <DescriptionField key={textbook.description} textbook={textbook} />
-        <MetaFields
-          meta={textbook.meta}
-          onChange={(meta) => updateTextbookDetails(textbook.id, { meta })}
-          showErrors
-          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-        />
+        <MetaChips textbook={textbook} onClick={openSettings} />
+        {textbook.description && <p className="max-w-2xl whitespace-pre-line">{textbook.description}</p>}
       </div>
+      <TextbookDetailsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        initial={textbook}
+        onSubmit={(details) => {
+          updateTextbookDetails(textbook.id, details);
+          toast("Настройки сохранены");
+        }}
+      />
     </div>
+  );
+}
+
+/** Subject, age group and level as quiet pills; in the global context each one opens the settings. */
+function MetaChips({ textbook, onClick, className = "" }: { textbook: Textbook; onClick?: () => void; className?: string }) {
+  const parts = metaParts(textbook.meta);
+  if (parts.length === 0) return null;
+  const chip = "flex h-8 items-center rounded-full bg-light px-3.5 font-semibold text-ink";
+  return (
+    <ul className={`flex flex-wrap gap-2 ${className}`}>
+      {parts.map((part) => (
+        <li key={part}>
+          {onClick ? (
+            <button type="button" onClick={onClick} className={`${chip} transition-colors duration-[120ms] hover:bg-brand-50`}>
+              {part}
+            </button>
+          ) : (
+            <span className={chip}>{part}</span>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -133,23 +164,6 @@ function TitleField({ textbook }: { textbook: Textbook }) {
         </p>
       )}
     </div>
-  );
-}
-
-function DescriptionField({ textbook }: { textbook: Textbook }) {
-  const updateTextbookDetails = useStore((s) => s.updateTextbookDetails);
-  const [draft, setDraft] = useState(textbook.description);
-  return (
-    <textarea
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => draft.trim() !== textbook.description && updateTextbookDetails(textbook.id, { description: draft })}
-      aria-label="Описание"
-      placeholder="Описание"
-      maxLength={500}
-      rows={1}
-      className={`field-sizing-content min-h-10 max-w-3xl resize-none py-2 ${inlineField} placeholder:text-neutral-400`}
-    />
   );
 }
 

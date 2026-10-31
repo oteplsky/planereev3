@@ -103,12 +103,17 @@ export function isMetaComplete(meta: MaterialMeta): boolean {
   );
 }
 
-/** «Английский язык · Взрослые · B1»; a named language or subject replaces «Другой …». */
-export function metaSummary(meta: MaterialMeta): string {
+/** «Английский язык», «Взрослые», «B1»: what's filled in; a named language or subject replaces «Другой …». */
+export function metaParts(meta: MaterialMeta): string[] {
   const subject = meta.subject && ((needsCustomSubject(meta.subject) && meta.customSubject.trim()) || subjectLabels[meta.subject]);
-  return [subject, meta.ageGroup && ageGroupLabels[meta.ageGroup], meta.level && levelLabels[meta.level]]
-    .filter(Boolean)
-    .join(" · ");
+  return [subject, meta.ageGroup && ageGroupLabels[meta.ageGroup], meta.level && levelLabels[meta.level]].filter(
+    (part): part is string => !!part,
+  );
+}
+
+/** «Английский язык · Взрослые · B1». */
+export function metaSummary(meta: MaterialMeta): string {
+  return metaParts(meta).join(" · ");
 }
 
 export interface MetaFilters {

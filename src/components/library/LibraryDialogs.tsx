@@ -2,7 +2,7 @@
 
 import { ArrowLeft, BookOpen, Check, ChevronRight, Folder as FolderIcon, LibraryBig } from "lucide-react";
 import { useState } from "react";
-import { CreateTextbookDialog } from "@/components/textbook/CreateTextbookDialog";
+import { TextbookDetailsDialog } from "@/components/textbook/TextbookDetailsDialog";
 import { ConfirmDialog, Dialog, NoticeDialog, PromptDialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui/Toast";
@@ -41,7 +41,7 @@ export function requestDelete(data: AppData, target: Target): DialogState {
   return reason ? { type: "blocked", reason } : { type: "delete", target };
 }
 
-/** Single-field creation. Textbooks have their own form (CreateTextbookDialog). */
+/** Single-field creation. Textbooks have their own form (TextbookDetailsDialog). */
 const createCopy = {
   lesson: { title: "Новый урок", label: "Название урока", placeholder: "Например, Present Perfect", done: "Урок создан" },
   folder: { title: "Новая папка", label: "Название папки", placeholder: "Например, Грамматика", done: "Папка создана" },
@@ -82,10 +82,10 @@ export function LibraryDialogs({ state, onClose, folderId, onDeleted, onTextbook
         }}
       />
 
-      <CreateTextbookDialog
+      <TextbookDetailsDialog
         open={state?.type === "create" && state.kind === "textbook"}
         onClose={onClose}
-        onCreate={(input) => onTextbookCreated?.(store.createTextbook(input, folderId))}
+        onSubmit={(input) => onTextbookCreated?.(store.createTextbook(input, folderId))}
       />
 
       <PromptDialog
@@ -283,15 +283,14 @@ function TextbookPicker({ lessonId, onClose }: { lessonId: string; onClose: () =
     <ul className="-mx-2 mt-2 max-h-80 overflow-y-auto">
       {textbooks.map((t) => {
         const isCurrent = t.id === currentId;
-        // Sections on but none yet: there's nowhere to put the lesson.
-        const noSections = t.useSections && t.sections.length === 0;
+        const hasSections = t.sections.length > 0;
         return (
           <li key={t.id}>
             <button
               type="button"
-              disabled={isCurrent || noSections}
-              onClick={() => (t.useSections ? setPicked(t.id) : move(t.id, null, t.title))}
-              className={`${optionClass} ${isCurrent ? "bg-selected disabled:hover:bg-selected" : ""} ${noSections ? "text-ink-secondary" : ""}`}
+              disabled={isCurrent}
+              onClick={() => (hasSections ? setPicked(t.id) : move(t.id, null, t.title))}
+              className={`${optionClass} ${isCurrent ? "bg-selected disabled:hover:bg-selected" : ""}`}
             >
               <BookOpen size={18} strokeWidth={1.75} className="text-ink-secondary" aria-hidden />
               <span className="flex-1 font-medium">{t.title}</span>
@@ -299,10 +298,8 @@ function TextbookPicker({ lessonId, onClose }: { lessonId: string; onClose: () =
                 <span className="flex items-center gap-1 text-caption text-action">
                   <Check size={14} strokeWidth={2} aria-hidden /> Сейчас здесь
                 </span>
-              ) : noSections ? (
-                <span className="text-caption">Нет разделов</span>
               ) : (
-                t.useSections && <ChevronRight size={18} strokeWidth={1.75} className="text-ink-secondary" aria-hidden />
+                hasSections && <ChevronRight size={18} strokeWidth={1.75} className="text-ink-secondary" aria-hidden />
               )}
             </button>
           </li>

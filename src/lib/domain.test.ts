@@ -270,13 +270,22 @@ describe("library management", () => {
     expect(d.findLearnerLesson(data, "anna", PS)!.title).toBeNull();
   });
 
-  it("deleting a section removes its lessons", () => {
+  it("deleting a section keeps its lessons in the same order", () => {
     const data = createDemoData();
+    const order = (data: AppData) => [...d.lessonNumbers(data, data.textbooks.find((t) => t.id === "tb_grammar_a2")!).keys()];
     const r = d.deleteSection(data, "tb_grammar_a2", "sec_gpa_2", T1);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.data.lessons.some((l) => l.id === "les_articles")).toBe(false);
-    expect(r.data.textbooks.find((t) => t.id === "tb_grammar_a2")!.sections).toHaveLength(1);
+    const tb = r.data.textbooks.find((t) => t.id === "tb_grammar_a2")!;
+    expect(tb.sections).toHaveLength(1);
+    expect(tb.sections[0].lessonIds).toContain("les_articles");
+    expect(order(r.data)).toEqual(order(data));
+
+    const first = d.deleteSection(r.data, "tb_grammar_a2", "sec_gpa_1", T1);
+    if (!first.ok) throw new Error();
+    const flat = first.data.textbooks.find((t) => t.id === "tb_grammar_a2")!;
+    expect(flat.sections).toEqual([]);
+    expect(order(first.data)).toEqual(order(data));
   });
 
   it("removing a lesson from a textbook moves it to the library root", () => {
@@ -494,7 +503,7 @@ describe("shared folders", () => {
     const own = cat.data.textbooks.find((t) => t.id === "tb_grammar_a2")!;
     expect(own.folderId).toBe("fld_grammar");
     const catLesson = cat.data.lessons.find((l) => l.textbookId === cat.textbookId)!.id;
-    const mixed = d.moveLessonToTextbook(cat.data, catLesson, own.id, own.useSections ? own.sections[0].id : null, T2);
+    const mixed = d.moveLessonToTextbook(cat.data, catLesson, own.id, own.sections[0]?.id ?? null, T2);
     expect(d.canShare(mixed, "folder", "fld_grammar")).toBe(false);
 
     const empty = d.createFolder(data, "Пусто", null);
@@ -539,17 +548,16 @@ describe("someone else's lessons", () => {
   it("an own lesson moved into a catalog copy stays the teacher's", () => {
     const { data, tb } = withCatalogTextbook();
     const own = d.createLesson(data, "Мой урок", { folderId: null }, T1);
-    const target = tb.useSections ? tb.sections[0].id : null;
+    const target = tb.sections[0]?.id ?? null;
     const next = d.moveLessonToTextbook(own.data, own.lessonId, tb.id, target, T2);
     expect(next.lessons.find((l) => l.id === own.lessonId)!.textbookId).toBe(tb.id);
     expect(author(next, own.lessonId)).toBeNull();
   });
 
-  it("needs a section exactly when the textbook has sections", () => {
+  it("refuses a section the textbook doesn't have", () => {
     const { data, tb } = withCatalogTextbook();
     const own = d.createLesson(data, "Мой урок", { folderId: null }, T1);
-    const wrong = tb.useSections ? null : "sec_nope";
-    expect(d.moveLessonToTextbook(own.data, own.lessonId, tb.id, wrong, T2)).toBe(own.data);
+    expect(d.moveLessonToTextbook(own.data, own.lessonId, tb.id, "sec_nope", T2)).toBe(own.data);
   });
 
   it("can't be shared, nor can an own textbook that has them", () => {
@@ -565,11 +573,10 @@ describe("someone else's lessons", () => {
 });
 
 describe("lesson numbers", () => {
-  it("count within each section, or straight through without sections", () => {
+  it("count straight through, sections or not", () => {
     let data = createDemoData();
     let tb = d.createTextbook(data, NEW_TEXTBOOK, null, T1);
-    data = d.setUseSections(tb.data, tb.textbookId, true, T1);
-    data = d.addSection(data, tb.textbookId, "Unit 1", T1);
+    data = d.addSection(tb.data, tb.textbookId, "Unit 1", T1);
     data = d.addSection(data, tb.textbookId, "Unit 2", T1);
     const [s1, s2] = data.textbooks.find((t) => t.id === tb.textbookId)!.sections;
     for (const [title, sectionId] of [["a", s1.id], ["b", s1.id], ["c", s2.id]] as const) {
@@ -579,7 +586,7 @@ describe("lesson numbers", () => {
       const numbers = d.lessonNumbers(data, data.textbooks.find((t) => t.id === id)!);
       return Object.fromEntries(data.lessons.filter((l) => numbers.has(l.id)).map((l) => [l.title, numbers.get(l.id)]));
     };
-    expect(byTitle(data, tb.textbookId)).toEqual({ a: "1.1", b: "1.2", c: "2.1" });
+    expect(byTitle(data, tb.textbookId)).toEqual({ a: "1", b: "2", c: "3" });
 
     tb = d.createTextbook(data, NEW_TEXTBOOK, null, T1);
     data = tb.data;
@@ -683,7 +690,7 @@ describe("textbook metadata", () => {
   it("creates a textbook without sections and edits its details", () => {
     const r = d.createTextbook(createDemoData(), { ...NEW_TEXTBOOK, title: "  Физика 7  ", description: " " }, null, T1);
     let tb = r.data.textbooks.find((t) => t.id === r.textbookId)!;
-    expect(tb).toMatchObject({ title: "Физика 7", description: "", useSections: false, coverImage: null });
+    expect(tb).toMatchObject({ title: "Физика 7", description: "", sections: [], coverImage: null });
 
     let data = d.updateTextbookDetails(r.data, tb.id, { title: "  " }, T2);
     expect(data.textbooks.find((t) => t.id === tb.id)!.title).toBe("Физика 7");
@@ -697,17 +704,15 @@ describe("textbook metadata", () => {
     expect(data.textbooks.find((t) => t.id === "tb_business")).toMatchObject({ cover: null, coverImage: null });
   });
 
-  it("locks the structure once the textbook has a lesson", () => {
+  it("the first section takes the lessons a textbook already has; later ones start empty", () => {
     const r = d.createTextbook(createDemoData(), NEW_TEXTBOOK, null, T1);
-    let data = d.setUseSections(r.data, r.textbookId, true, T1);
+    let data = r.data;
+    for (const title of ["a", "b"]) data = d.createLesson(data, title, { textbookId: r.textbookId }, T1).data;
     data = d.addSection(data, r.textbookId, "Unit 1", T1);
-    data = d.setUseSections(data, r.textbookId, false, T1);
-    expect(data.textbooks.find((t) => t.id === r.textbookId)!.useSections).toBe(false);
-
-    data = d.setUseSections(data, r.textbookId, true, T1);
-    const sectionId = data.textbooks.find((t) => t.id === r.textbookId)!.sections[0].id;
-    data = d.createLesson(data, "Урок 1", { textbookId: r.textbookId, sectionId }, T1).data;
-    expect(d.setUseSections(data, r.textbookId, false, T1)).toBe(data);
+    data = d.addSection(data, r.textbookId, "Unit 2", T1);
+    const tb = data.textbooks.find((t) => t.id === r.textbookId)!;
+    expect(tb.looseLessonIds).toEqual([]);
+    expect(tb.sections.map((s) => s.lessonIds.length)).toEqual([2, 0]);
   });
 
   it("moves a section with its lessons to any position", () => {

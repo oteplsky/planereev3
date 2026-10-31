@@ -329,7 +329,7 @@ export interface TextbookProgress {
 /** Null when no lesson of the textbook has been taught to or set as homework for the learner. */
 export function textbookProgress(data: AppData, learnerId: string, textbook: Textbook): TextbookProgress | null {
   const { sections, loose } = textbookLessons(data, textbook);
-  const ordered = textbook.useSections ? sections.flatMap((s) => s.lessons) : loose;
+  const ordered = [...loose, ...sections.flatMap((s) => s.lessons)];
   const entries = getLessonHistory(data, learnerId).filter((e) => e.textbook?.id === textbook.id);
   if (entries.length === 0) return null;
 
@@ -695,7 +695,6 @@ export function createTextbook(
     description: input.description.trim(),
     meta: normalizeMeta(input.meta),
     folderId,
-    useSections: false,
     sections: [],
     looseLessonIds: [],
     cover: null,
@@ -749,21 +748,6 @@ export function setTextbookCoverImage(
 
 export function textbookLessonCount(textbook: Textbook): number {
   return textbook.looseLessonIds.length + textbook.sections.reduce((n, s) => n + s.lessonIds.length, 0);
-}
-
-/**
- * «Использовать разделы». Refused once the textbook has lessons: the MVP never converts
- * one structure into the other, so nothing is moved or deleted.
- */
-export function setUseSections(
-  data: AppData,
-  textbookId: string,
-  useSections: boolean,
-  now: string,
-): AppData {
-  const tb = data.textbooks.find((t) => t.id === textbookId);
-  if (!tb || tb.useSections === useSections || textbookLessonCount(tb) > 0) return data;
-  return editTextbook(data, textbookId, (t) => (t.useSections = useSections), now);
 }
 
 export interface LessonPlacement {
@@ -1198,6 +1182,7 @@ function editTextbook(
   return next;
 }
 
+/** The first section takes the lessons the textbook already has; later ones start empty. */
 export function addSection(
   data: AppData,
   textbookId: string,
@@ -1207,7 +1192,11 @@ export function addSection(
   return editTextbook(
     data,
     textbookId,
-    (tb) => tb.sections.push({ id: makeId("sec"), title, lessonIds: [], order: tb.sections.length }),
+    (tb) => {
+      const lessonIds = tb.sections.length === 0 ? tb.looseLessonIds : [];
+      if (tb.sections.length === 0) tb.looseLessonIds = [];
+      tb.sections.push({ id: makeId("sec"), title, lessonIds, order: tb.sections.length });
+    },
     now,
   );
 }
@@ -1273,7 +1262,10 @@ export function moveSectionTo(
   );
 }
 
-/** Deletes the section together with its lessons (spec §6.1); learners keep their copies. */
+/**
+ * Removes the section heading only: its lessons stay where they were in the order, at the end of the
+ * section above, or among the lessons without a section when it was the first one.
+ */
 export function deleteSection(
   data: AppData,
   textbookId: string,
@@ -1281,15 +1273,17 @@ export function deleteSection(
   now: string,
 ): Result {
   const tb = data.textbooks.find((t) => t.id === textbookId);
-  const section = tb?.sections.find((s) => s.id === sectionId);
-  if (!tb || !section) return { ok: false, reason: "not_found" };
-  const withoutLessons = clone(data);
-  removeLessons(withoutLessons, section.lessonIds);
+  if (!tb?.sections.some((s) => s.id === sectionId)) return { ok: false, reason: "not_found" };
   return ok(
     editTextbook(
-      withoutLessons,
+      data,
       textbookId,
-      (t) => (t.sections = t.sections.filter((s) => s.id !== sectionId)),
+      (t) => {
+        const sorted = [...t.sections].sort((a, b) => a.order - b.order);
+        const i = sorted.findIndex((s) => s.id === sectionId);
+        (i > 0 ? sorted[i - 1].lessonIds : t.looseLessonIds).push(...sorted[i].lessonIds);
+        t.sections = sorted.filter((s) => s.id !== sectionId);
+      },
       now,
     ),
   );
@@ -1355,7 +1349,6 @@ export function moveLessonToTextbook(
   const lesson = data.lessons.find((l) => l.id === lessonId);
   const target = data.textbooks.find((t) => t.id === textbookId);
   if (!lesson || !target || lesson.textbookId === textbookId) return data;
-  if (target.useSections !== (sectionId !== null)) return data;
   if (sectionId !== null && !target.sections.some((s) => s.id === sectionId)) return data;
   const next = clone(data);
   const moved = next.lessons.find((l) => l.id === lessonId)!;
@@ -1384,14 +1377,9 @@ export function textbookLessons(data: Materials, textbook: Textbook) {
   };
 }
 
-/**
- * Lesson numbers as shown in the textbook: 1, 2, 3… without sections; 1.1, 1.2, 2.1… with them,
- * counted within each section.
- */
+/** Lesson numbers as shown in the textbook: 1, 2, 3… straight through, sections or not. */
 export function lessonNumbers(data: Materials, textbook: Textbook): Map<string, string> {
   const { sections, loose } = textbookLessons(data, textbook);
-  const entries = textbook.useSections
-    ? sections.flatMap((s, si) => s.lessons.map((l, li) => [l.id, `${si + 1}.${li + 1}`] as const))
-    : loose.map((l, i) => [l.id, `${i + 1}`] as const);
-  return new Map(entries);
+  const ordered = [...loose, ...sections.flatMap((s) => s.lessons)];
+  return new Map(ordered.map((l, i) => [l.id, `${i + 1}`]));
 }

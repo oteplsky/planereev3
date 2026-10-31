@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, BookOpen, BookX, Check, Ellipsis, FolderOutput, GripVertical, ListPlus, Pencil, Plus, Trash2 } from "lucide-react";
+import { useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { ArrowDown, ArrowUp, BookOpen, BookX, Check, ChevronDown, Ellipsis, FolderOutput, GripVertical, ListPlus, Pencil, Plus, Trash2 } from "lucide-react";
 import { ActionsMenu, type CardActions } from "@/components/library/Cards";
 import { LibraryDialogs, requestDelete, type DialogState } from "@/components/library/LibraryDialogs";
 import { shareAction } from "@/components/library/ShareDialog";
@@ -13,21 +13,17 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { ConfirmDialog, Dialog, PromptDialog } from "@/components/ui/Dialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Menu } from "@/components/ui/Menu";
-import { Switch } from "@/components/ui/Switch";
 import { toast } from "@/components/ui/Toast";
 import { contextHref, useActiveLearner } from "@/lib/context";
 import {
   folderPath,
   homeworkStatusForLearner,
-  lessonHasLearnerActivity,
   lessonNumbers,
   lessonStatusForLearner,
   lessonTitleFor,
-  textbookLessonCount,
   textbookLessons,
   textbookProgress,
 } from "@/lib/domain";
-import { KEPT_FOR_LEARNERS } from "@/lib/messages";
 import { useStore } from "@/lib/store";
 import type { Lesson, Textbook, TextbookSection } from "@/lib/types";
 import { TextbookHeader } from "./TextbookHeader";
@@ -41,7 +37,7 @@ type TextbookDialog =
   | { type: "deleteSection"; section: TextbookSection }
   | { type: "moveLesson"; lesson: Lesson; fromSectionId: string };
 
-/** What is being dragged, and where it would land. `container` is a section id, or null without sections. */
+/** What is being dragged, and where it would land. `container` is a section id, or null for lessons outside sections. */
 type Drag = { kind: "lesson"; id: string; container: string | null } | { kind: "section"; id: string };
 type Drop = { kind: "lesson"; container: string | null; index: number } | { kind: "section"; index: number };
 
@@ -57,9 +53,47 @@ const halfIndex = (e: DragEvent, index: number) => {
 const refocusHandle = (id: string) =>
   requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-handle="${id}"]`)?.focus());
 
+/** Row controls show on hover or focus, and always on touch screens. */
+const REVEAL = "opacity-0 transition-opacity duration-[120ms] group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100";
+
+/** Folded sections, per textbook and per browser. Storage is a convenience: when it fails, folds last until reload. */
+const folded = new Map<string, string>();
+const foldListeners = new Set<() => void>();
+
+function readFolds(key: string) {
+  if (!folded.has(key)) {
+    try {
+      folded.set(key, localStorage.getItem(key) ?? "[]");
+    } catch {
+      folded.set(key, "[]");
+    }
+  }
+  return folded.get(key)!;
+}
+
+const subscribeFolds = (listener: () => void) => {
+  foldListeners.add(listener);
+  return () => void foldListeners.delete(listener);
+};
+
+export function useCollapsedSections(textbookId: string) {
+  const key = `planeree:collapsed-sections:${textbookId}`;
+  const raw = useSyncExternalStore(subscribeFolds, () => readFolds(key), () => "[]");
+  const collapsed: string[] = JSON.parse(raw);
+  const toggle = (sectionId: string) => {
+    const next = JSON.stringify(collapsed.includes(sectionId) ? collapsed.filter((id) => id !== sectionId) : [...collapsed, sectionId]);
+    folded.set(key, next);
+    try {
+      localStorage.setItem(key, next);
+    } catch {}
+    foldListeners.forEach((listener) => listener());
+  };
+  return { isCollapsed: (sectionId: string) => collapsed.includes(sectionId), toggle };
+}
+
 /**
- * Spec §6: one textbook. «Использовать разделы» picks the structure: Учебник → Уроки, or
- * Учебник → Разделы → Уроки. Same structure in every context; editable only globally.
+ * Spec §6: one textbook, a list of lessons with optional section headings over them. Lessons outside
+ * sections come first. Same structure in every context; editable only globally.
  */
 export function TextbookScreen() {
   const { id } = useParams<{ id: string }>();
@@ -71,6 +105,7 @@ export function TextbookScreen() {
   const [dialog, setDialog] = useState<TextbookDialog>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [drop, setDrop] = useState<Drop | null>(null);
+  const folds = useCollapsedSections(id);
 
   const learnerId = learner?.id ?? null;
   const editable = learner === null;
@@ -88,7 +123,6 @@ export function TextbookScreen() {
   }
 
   const { sections, loose } = textbookLessons(data, textbook);
-  const useSections = textbook.useSections;
   const numbers = lessonNumbers(data, textbook);
   const lessonsIn = (container: string | null) =>
     container === null ? loose : (sections.find((s) => s.section.id === container)?.lessons ?? []);
@@ -156,8 +190,6 @@ export function TextbookScreen() {
 
   // ── Actions ──
 
-  const requestSectionDelete = (section: TextbookSection) => setDialog({ type: "deleteSection", section });
-
   const lessonActions = (lesson: Lesson, container: string | null): CardActions => {
     const target = { kind: "lesson" as const, id: lesson.id, title: lesson.title };
     return {
@@ -197,11 +229,17 @@ export function TextbookScreen() {
     </Button>
   );
 
+  const addSectionButton = (
+    <Button variant="ghost" icon={<Plus size={20} strokeWidth={1.75} aria-hidden />} onClick={() => setDialog({ type: "addSection" })}>
+      Добавить раздел
+    </Button>
+  );
+
   const lessonList = (lessons: Lesson[], container: string | null) => {
     const indicatorAt = (i: number) =>
       drop?.kind === "lesson" && drop.container === container && drop.index === i && <DropLine />;
     return (
-      <ol className="flex flex-col gap-2">
+      <ol className="flex flex-col gap-1">
         {lessons.map((lesson, i) => (
           <li
             key={lesson.id}
@@ -257,8 +295,6 @@ export function TextbookScreen() {
     onDrop,
   });
 
-  const lessonCount = textbookLessonCount(textbook);
-
   return (
     <div className="flex flex-col gap-10">
       <header className="flex flex-col gap-5">
@@ -282,124 +318,118 @@ export function TextbookScreen() {
         />
       </header>
 
-      <section aria-label="Содержание учебника" className="flex flex-col gap-5">
-        {editable && (
-          <div>
-            <Switch
-              label="Использовать разделы"
-              checked={useSections}
-              onChange={(value) => store.setUseSections(textbook.id, value)}
-              lockedReason={lessonCount > 0 ? "Структуру нельзя изменить после добавления уроков" : undefined}
-            />
-          </div>
-        )}
-
-        {!useSections &&
-          (loose.length === 0 ? (
-            <EmptyState
-              icon={<ListPlus size={28} strokeWidth={1.5} aria-hidden />}
-              title="В учебнике пока нет уроков"
-              action={editable && addLessonButton(null)}
-            />
-          ) : (
-            <div {...lessonDropZone(null, loose.length)} className="flex flex-col items-start gap-3">
-              <div className="w-full">{lessonList(loose, null)}</div>
-              {editable && addLessonButton(null)}
-            </div>
-          ))}
-
-        {useSections && sections.length === 0 && (
+      <section aria-label="Содержание учебника" className="flex flex-col gap-4">
+        {loose.length === 0 && sections.length === 0 ? (
           <EmptyState
             icon={<ListPlus size={28} strokeWidth={1.5} aria-hidden />}
-            title="В учебнике пока нет разделов"
+            title="В учебнике пока нет уроков"
             action={
               editable && (
-                <Button icon={<Plus size={20} strokeWidth={1.75} aria-hidden />} onClick={() => setDialog({ type: "addSection" })}>
-                  Добавить раздел
-                </Button>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {addLessonButton(null)}
+                  {addSectionButton}
+                </div>
               )
             }
           />
-        )}
+        ) : (
+          <>
+            {loose.length > 0 && (
+              <div {...lessonDropZone(null, loose.length)}>{lessonList(loose, null)}</div>
+            )}
 
-        {useSections && sections.length > 0 && (
-          <div className="flex flex-col gap-4">
-            {sections.map(({ section, lessons }, index) => (
-              <div
-                key={section.id}
-                onDragOver={(e) => {
-                  if (drag?.kind !== "section") return;
-                  e.preventDefault();
-                  setDrop({ kind: "section", index: halfIndex(e, index) });
-                }}
-                onDrop={onDrop}
-              >
-                {drop?.kind === "section" && drop.index === index && <DropLine />}
-                <section
-                  data-drag-row
-                  aria-labelledby={`sec-${section.id}`}
-                  {...lessonDropZone(section.id, lessons.length)}
-                  className={`flex flex-col gap-3 rounded-lg border bg-surface p-4 transition-[border-color,opacity] duration-[120ms] sm:p-5 ${
-                    drag?.id === section.id ? "opacity-40" : ""
-                  } ${drop?.kind === "lesson" && drop.container === section.id && lessons.length === 0 ? "border-action" : "border-line"}`}
+            {sections.map(({ section, lessons }, index) => {
+              const collapsed = folds.isCollapsed(section.id);
+              return (
+                <div
+                  key={section.id}
+                  onDragOver={(e) => {
+                    if (drag?.kind !== "section") return;
+                    e.preventDefault();
+                    setDrop({ kind: "section", index: halfIndex(e, index) });
+                  }}
+                  onDrop={onDrop}
                 >
-                  <div className="flex items-center gap-2">
-                    {editable && (
-                      <DragHandle
-                        id={section.id}
-                        label={`Переместить раздел «${section.title}»`}
-                        onDragStart={(e) => startDrag(e, { kind: "section", id: section.id })}
-                        onDragEnd={endDrag}
-                        onKeyDown={(e) => sectionKeyMove(e, section, index)}
-                      />
-                    )}
-                    <h2 id={`sec-${section.id}`} className="min-w-0 flex-1 text-h3">
-                      {section.title}
-                    </h2>
-                    {editable && (
-                      <Menu
-                        items={[
-                          { label: "Переименовать", icon: <Pencil {...iconProps} />, onSelect: () => setDialog({ type: "renameSection", section }) },
-                          ...(index > 0
-                            ? [{ label: "Переместить выше", icon: <ArrowUp {...iconProps} />, onSelect: () => store.moveSection(textbook.id, section.id, -1) }]
-                            : []),
-                          ...(index < sections.length - 1
-                            ? [{ label: "Переместить ниже", icon: <ArrowDown {...iconProps} />, onSelect: () => store.moveSection(textbook.id, section.id, 1) }]
-                            : []),
-                          { label: "Удалить раздел", icon: <Trash2 {...iconProps} />, danger: true, onSelect: () => requestSectionDelete(section) },
-                        ]}
-                        trigger={(props) => (
-                          <IconButton {...props} label={`Действия с разделом: ${section.title}`} size="sm">
-                            <Ellipsis size={20} strokeWidth={1.75} />
-                          </IconButton>
-                        )}
-                      />
-                    )}
-                  </div>
-
-                  {lessons.length === 0 ? (
-                    <div className="flex flex-col items-center gap-3 rounded-md border border-dashed border-line-strong px-4 py-6 text-center">
-                      <p className="text-ink-secondary">В разделе пока нет уроков</p>
-                      {editable && addLessonButton(section.id)}
+                  {drop?.kind === "section" && drop.index === index && <DropLine />}
+                  <section
+                    data-drag-row
+                    aria-labelledby={`sec-${section.id}`}
+                    {...lessonDropZone(section.id, lessons.length)}
+                    className={`border-t bg-surface transition-[border-color,background-color,opacity] duration-[120ms] ${
+                      drag?.id === section.id ? "opacity-40" : ""
+                    } ${drop?.kind === "lesson" && drop.container === section.id && (collapsed || lessons.length === 0) ? "border-action bg-selected" : "border-line"}`}
+                  >
+                    <div className="group flex items-center gap-2 py-3">
+                      {editable && (
+                        <DragHandle
+                          id={section.id}
+                          label={`Переместить раздел «${section.title}»`}
+                          onDragStart={(e) => startDrag(e, { kind: "section", id: section.id })}
+                          onDragEnd={endDrag}
+                          onKeyDown={(e) => sectionKeyMove(e, section, index)}
+                        />
+                      )}
+                      <h2 id={`sec-${section.id}`} className="min-w-0 flex-1 text-h3">
+                        <button
+                          type="button"
+                          aria-expanded={!collapsed}
+                          aria-controls={`sec-body-${section.id}`}
+                          onClick={() => folds.toggle(section.id)}
+                          className={`flex w-full items-center gap-3 rounded-sm text-left ${editable ? "" : "pl-1"}`}
+                        >
+                          <span className="min-w-0 flex-1">{section.title}</span>
+                          <ChevronDown
+                            size={20}
+                            strokeWidth={1.75}
+                            className={`shrink-0 text-ink-secondary transition-transform duration-[120ms] ${collapsed ? "-rotate-90" : ""}`}
+                            aria-hidden
+                          />
+                        </button>
+                      </h2>
+                      {editable && (
+                        <Menu
+                          items={[
+                            { label: "Переименовать", icon: <Pencil {...iconProps} />, onSelect: () => setDialog({ type: "renameSection", section }) },
+                            ...(index > 0
+                              ? [{ label: "Переместить выше", icon: <ArrowUp {...iconProps} />, onSelect: () => store.moveSection(textbook.id, section.id, -1) }]
+                              : []),
+                            ...(index < sections.length - 1
+                              ? [{ label: "Переместить ниже", icon: <ArrowDown {...iconProps} />, onSelect: () => store.moveSection(textbook.id, section.id, 1) }]
+                              : []),
+                            { label: "Удалить раздел", icon: <Trash2 {...iconProps} />, danger: true, onSelect: () => setDialog({ type: "deleteSection", section }) },
+                          ]}
+                          trigger={(props) => (
+                            <IconButton {...props} label={`Действия с разделом: ${section.title}`} size="sm" className={REVEAL}>
+                              <Ellipsis size={20} strokeWidth={1.75} />
+                            </IconButton>
+                          )}
+                        />
+                      )}
                     </div>
-                  ) : (
-                    <>
-                      {lessonList(lessons, section.id)}
-                      {editable && <div>{addLessonButton(section.id)}</div>}
-                    </>
-                  )}
-                </section>
-                {drop?.kind === "section" && index === sections.length - 1 && drop.index === sections.length && <DropLine />}
-              </div>
-            ))}
+
+                    {!collapsed && (
+                      <div id={`sec-body-${section.id}`} className="flex flex-col items-start gap-2 pb-3">
+                        {lessons.length === 0 ? (
+                          <p className="px-3 py-2 text-ink-secondary">В разделе пока нет уроков</p>
+                        ) : (
+                          <div className="w-full">{lessonList(lessons, section.id)}</div>
+                        )}
+                        {editable && addLessonButton(section.id)}
+                      </div>
+                    )}
+                  </section>
+                  {drop?.kind === "section" && index === sections.length - 1 && drop.index === sections.length && <DropLine />}
+                </div>
+              );
+            })}
+
             {editable && (
-              <div>
-                <Button icon={<Plus size={20} strokeWidth={1.75} aria-hidden />} onClick={() => setDialog({ type: "addSection" })}>
-                  Добавить раздел
-                </Button>
+              <div className="flex flex-wrap gap-2">
+                {sections.length === 0 && addLessonButton(null)}
+                {addSectionButton}
               </div>
             )}
-          </div>
+          </>
         )}
       </section>
 
@@ -443,7 +473,7 @@ function DragHandle({ id, label, onDragStart, onDragEnd, onKeyDown }: DragHandle
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onKeyDown={onKeyDown}
-      className="relative z-10 grid size-8 shrink-0 cursor-grab place-items-center rounded-sm text-ink-secondary transition-colors duration-[120ms] hover:bg-light hover:text-ink active:cursor-grabbing"
+      className={`relative z-10 grid size-8 shrink-0 cursor-grab place-items-center rounded-sm text-ink-secondary transition-[color,background-color,opacity] duration-[120ms] hover:bg-light hover:text-ink active:cursor-grabbing ${REVEAL}`}
     >
       <GripVertical size={18} strokeWidth={1.75} aria-hidden />
     </button>
@@ -461,12 +491,15 @@ interface LessonRowProps {
   actions?: CardActions;
 }
 
-/** One lesson in the textbook's order: the whole row opens it; handle and menu stay separate controls. */
+/**
+ * One lesson in the textbook's order: the whole row opens it; handle and menu stay separate controls
+ * and show on hover.
+ */
 export function LessonRow({ lesson, number, href, dragging = false, status, handle, actions }: LessonRowProps) {
   return (
     <div
       data-drag-row
-      className={`group relative flex min-h-14 items-center gap-3 rounded-lg border bg-surface py-2 pr-2 transition-[border-color,opacity] duration-[120ms] border-line hover:border-line-strong ${
+      className={`group relative flex min-h-14 items-center gap-3 rounded-md bg-surface py-2 pr-2 transition-[background-color,opacity] duration-[120ms] hover:bg-hover ${
         handle ? "pl-1" : "pl-3"
       } ${dragging ? "opacity-40" : ""}`}
     >
@@ -475,12 +508,16 @@ export function LessonRow({ lesson, number, href, dragging = false, status, hand
         {number}
       </span>
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
-        <Link href={href} className="line-clamp-2 font-bold after:absolute after:inset-0 after:rounded-lg">
+        <Link href={href} className="line-clamp-2 font-bold after:absolute after:inset-0 after:rounded-md">
           {lesson.title}
         </Link>
         {status}
       </div>
-      {actions && <ActionsMenu title={lesson.title} actions={actions} />}
+      {actions && (
+        <div className={REVEAL}>
+          <ActionsMenu title={lesson.title} actions={actions} />
+        </div>
+      )}
     </div>
   );
 }
@@ -541,11 +578,7 @@ function TextbookDialogs({
       <ConfirmDialog
         open={state?.type === "deleteSection"}
         title="Удалить раздел?"
-        description={`Раздел и все уроки внутри него будут удалены. ${
-          state?.type === "deleteSection" && state.section.lessonIds.some((id) => lessonHasLearnerActivity(store.data, id))
-            ? KEPT_FOR_LEARNERS
-            : "Это действие нельзя отменить."
-        }`}
+        description="Уроки раздела останутся в учебнике."
         confirmLabel="Удалить раздел"
         onClose={onClose}
         onConfirm={() => {

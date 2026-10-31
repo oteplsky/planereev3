@@ -61,13 +61,9 @@ export interface Textbook {
   /** Also applies to every lesson inside the textbook. */
   meta: MaterialMeta;
   folderId: string | null;
-  /**
-   * Off: Учебник → Уроки (lessons in looseLessonIds). On: Учебник → Разделы → Уроки.
-   * Can change only while the textbook has no lessons.
-   */
-  useSections: boolean;
+  /** Optional headings over the lessons; a textbook without them is a plain list. */
   sections: TextbookSection[];
-  /** Lessons of a textbook without sections. */
+  /** Lessons outside any section, shown before the first one. */
   looseLessonIds: string[];
   /** Generated colour cover (demo materials). */
   cover: AccentColor | null;

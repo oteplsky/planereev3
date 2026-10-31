@@ -16,7 +16,7 @@ import {
 interface MetaFieldsProps {
   meta: MaterialMeta;
   onChange: (meta: MaterialMeta) => void;
-  /** Mark empty required fields. Off in the creation modal, where «Создать» stays disabled instead. */
+  /** Mark empty required fields. Off when creating, where «Создать» stays disabled instead. */
   showErrors?: boolean;
   className?: string;
 }

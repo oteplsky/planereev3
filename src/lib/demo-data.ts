@@ -195,7 +195,7 @@ const moreTextbookLessons: Lesson[] = [
   ] as LessonSpec[]).map((spec) => simpleLesson(spec, { textbookId: phv })),
 ];
 
-type TextbookSpec = Omit<Textbook, "description" | "meta" | "useSections" | "coverImage" | "author" | "catalogSourceId">;
+type TextbookSpec = Omit<Textbook, "description" | "meta" | "coverImage" | "author" | "catalogSourceId">;
 
 const textbookSpecs: TextbookSpec[] = [
   {
@@ -342,7 +342,6 @@ const textbooks: Textbook[] = textbookSpecs.map((spec) => {
     ...spec,
     description,
     meta: { subject: "english", customSubject: "", ageGroup, level },
-    useSections: spec.sections.length > 0,
     coverImage: null,
     // One textbook was added from the catalog, so the library shows a material by another author.
     ...(spec.id === phv ? { author: PLANEREE, catalogSourceId: "cat_phrasal" } : { author: null, catalogSourceId: null }),

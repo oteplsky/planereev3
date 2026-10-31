@@ -50,7 +50,6 @@ interface Store {
   createTextbook(input: d.NewTextbook, folderId: string | null): string;
   updateTextbookDetails(textbookId: string, details: d.TextbookDetails): void;
   setTextbookCoverImage(textbookId: string, image: string | null): void;
-  setUseSections(textbookId: string, useSections: boolean): void;
   createLesson(title: string, placement: d.LessonPlacement): string;
   renameMaterial(kind: Kind, id: string, title: string): void;
   moveMaterial(kind: Kind, id: string, folderId: string | null): void;
@@ -134,7 +133,6 @@ export const useStore = create<Store>()(
         },
         updateTextbookDetails: (id, details) => commit(d.updateTextbookDetails(data(), id, details, now())),
         setTextbookCoverImage: (id, image) => commit(d.setTextbookCoverImage(data(), id, image, now())),
-        setUseSections: (id, value) => commit(d.setUseSections(data(), id, value, now())),
         createLesson(title, placement) {
           const r = d.createLesson(data(), title, placement, now());
           commit(r.data);

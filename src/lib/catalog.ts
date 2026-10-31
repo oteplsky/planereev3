@@ -182,7 +182,6 @@ function build(spec: TextbookSpec): { textbook: Textbook; lessons: Lesson[] } {
       description: spec.description,
       meta: spec.meta,
       folderId: null,
-      useSections: sections.length > 0,
       sections,
       looseLessonIds,
       cover: spec.cover,
