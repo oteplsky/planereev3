@@ -5,12 +5,12 @@ import { useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { LearnerSelector } from "@/components/LearnerSelector";
-import { FormatChips, LearnerProfile, quietChip } from "@/components/learner/LearnerProfile";
+import { LearnerProfile } from "@/components/learner/LearnerProfile";
 import { LearnerActions } from "@/components/learner/LearnerWorkspace";
 import { Library } from "@/components/library/Library";
 import { Avatar } from "@/components/ui/Avatar";
 import { contextHref, useActiveLearner } from "@/lib/context";
-import { learnerTypeLabel, membersOf } from "@/lib/learners";
+import { membersOf } from "@/lib/learners";
 import { useStore } from "@/lib/store";
 import type { Learner } from "@/lib/types";
 
@@ -34,20 +34,17 @@ function LearnerHeader({ learner }: { learner: Learner }) {
   return learner.type === "group" ? <GroupHeader group={learner} /> : <StudentHeader student={learner} />;
 }
 
-/** Name with quiet context chips under it, and the learner's one main action on the right. */
-function HeaderRow({ learner, title, chips }: { learner: Learner; title: ReactNode; chips: ReactNode }) {
+/** Name, and the learner's one main action on the right. */
+function HeaderRow({ learner, title }: { learner: Learner; title: ReactNode }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-      <div className="flex min-w-0 flex-col items-start gap-2">
-        <h1 className="min-w-0 text-h2">{title}</h1>
-        {chips}
-      </div>
+      <h1 className="min-w-0 text-h2">{title}</h1>
       <LearnerActions learner={learner} />
     </div>
   );
 }
 
-/** Avatar and name open the profile; chips say how the student studies. */
+/** Avatar and name open the profile. */
 function StudentHeader({ student }: { student: Learner }) {
   const [profileOpen, setProfileOpen] = useState(false);
   return (
@@ -71,7 +68,6 @@ function StudentHeader({ student }: { student: Learner }) {
             />
           </button>
         }
-        chips={<FormatChips learner={student} />}
       />
       <LearnerProfile learner={student} open={profileOpen} onClose={() => setProfileOpen(false)} />
     </header>
@@ -92,7 +88,6 @@ function GroupHeader({ group }: { group: Learner }) {
             <span className="truncate">{group.name}</span>
           </span>
         }
-        chips={<span className={quietChip}>{learnerTypeLabel(group)}</span>}
       />
       <ul className="flex flex-wrap gap-2" aria-label="Ученики группы">
         {members.map((m) => (

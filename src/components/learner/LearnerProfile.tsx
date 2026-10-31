@@ -12,35 +12,6 @@ import { useStore } from "@/lib/store";
 import type { Learner } from "@/lib/types";
 
 /**
- * Lesson context on a student's page. «Индивидуально» is the current context — selected, not a
- * control — so «Начать индивидуальный урок» reads unambiguously. Group chips open the group,
- * where lessons are for the whole group. Group membership never hides the individual context.
- */
-/** Neutral, quiet tag: says how someone studies without competing with the actions. */
-export const quietChip = "inline-flex h-6 items-center rounded-full border border-line px-2.5 text-caption text-ink-secondary";
-
-export function FormatChips({ learner }: { learner: Learner }) {
-  const data = useStore((s) => s.data);
-  const groups = groupsOf(data, learner.id);
-  return (
-    <span className="flex flex-wrap gap-1.5">
-      <span aria-current="page" className={quietChip}>
-        Индивидуально
-      </span>
-      {groups.map((g) => (
-        <Link
-          key={g.id}
-          href={contextHref("/library", g.id)}
-          className={`${quietChip} transition-colors duration-[120ms] hover:border-line-strong hover:text-ink`}
-        >
-          {g.name}
-        </Link>
-      ))}
-    </span>
-  );
-}
-
-/**
  * Student profile (spec §5). Avatar picking, email and notes are local to this view:
  * nothing is uploaded or saved yet. Schedule and balance are placeholders for the CRM.
  */
@@ -58,13 +29,10 @@ function ProfileBody({ learner }: { learner: Learner }) {
     <div className="flex flex-col gap-7">
       <div className="flex flex-col items-center gap-3 text-center">
         <AvatarPicker learner={learner} />
-        <div>
-          <p className="text-h2">{learner.name}</p>
-          <div className="mt-2 flex justify-center">
-            <FormatChips learner={learner} />
-          </div>
-        </div>
+        <p className="text-h2">{learner.name}</p>
       </div>
+
+      <GroupsField learner={learner} />
 
       <Field label="Email">
         <EmailField initial={learner.email ?? ""} />
@@ -102,6 +70,26 @@ function ProfileBody({ learner }: { learner: Learner }) {
         />
       </Field>
     </div>
+  );
+}
+
+/** The groups the student is also in; each opens that group. Membership itself is managed in the CRM. */
+function GroupsField({ learner }: { learner: Learner }) {
+  const data = useStore((s) => s.data);
+  const groups = groupsOf(data, learner.id);
+  if (groups.length === 0) return null;
+  return (
+    <Field label="Группы">
+      <ul className="flex flex-col gap-1">
+        {groups.map((g) => (
+          <li key={g.id}>
+            <Link href={contextHref("/library", g.id)} className="font-semibold text-action hover:underline">
+              {g.name}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Field>
   );
 }
 
