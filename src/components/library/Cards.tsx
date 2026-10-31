@@ -126,7 +126,7 @@ interface MaterialCardProps {
   href: string;
   kind: "lesson" | "textbook";
   title: string;
-  caption?: string;
+  caption?: React.ReactNode;
   /** Omit for a compact card without a cover (lessons inside a textbook). */
   cover?: AccentColor | null;
   coverImage?: string | null;
@@ -178,7 +178,7 @@ export function MaterialCard({ href, kind, title, caption, cover, coverImage, le
             <Link href={href} draggable={reorder ? false : undefined} className="line-clamp-2 text-body-lg font-bold after:absolute after:inset-0 after:rounded-lg">
               {title}
             </Link>
-            {caption && <p className="mt-1 text-body text-ink-secondary">{caption}</p>}
+            {caption && <div className="mt-1 text-body text-ink-secondary">{caption}</div>}
             {badge && <div className="mt-2">{badge}</div>}
           </div>
           {actions && <ActionsMenu title={title} actions={actions} />}

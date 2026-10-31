@@ -18,7 +18,7 @@ const statusActions: Record<HomeworkStatus, { to: HomeworkStatus; label: string;
     { to: "reviewed", label: "Отметить как проверенное", icon: <Check {...iconProps} /> },
     { to: "assigned", label: "Вернуть в «Назначено»", icon: <RotateCcw {...iconProps} /> },
   ],
-  reviewed: [{ to: "completed", label: "Вернуть в «Выполнено»", icon: <RotateCcw {...iconProps} /> }],
+  reviewed: [{ to: "completed", label: "Вернуть в «К проверке»", icon: <RotateCcw {...iconProps} /> }],
 };
 
 const statusToast: Record<HomeworkStatus, string> = {

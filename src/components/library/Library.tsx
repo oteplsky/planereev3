@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type DragEvent } from "react";
 import { ArrowRight, BookOpen, FileText, FolderOpen, FolderOutput, SearchX } from "lucide-react";
 import { InLibraryChip } from "@/components/catalog/AddToLibrary";
-import { LessonStatusText } from "@/components/ui/Badge";
+import { LessonStatusIcons } from "@/components/ui/Badge";
+import { AuthorCaption } from "./AuthorCaption";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Button, textButtonClass } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -218,7 +219,7 @@ export function Library({ learner, folderId }: LibraryProps) {
           href={contextHref(`/textbook/${item.id}`, learnerId)}
           kind="textbook"
           title={item.title}
-          caption={item.author?.name}
+          caption={item.author && <AuthorCaption author={item.author} />}
           lessonCount={textbookLessonCount(item)}
           badge={progress && <Progress value={progress.completed} total={progress.total} />}
           cover={item.cover}
@@ -234,11 +235,11 @@ export function Library({ learner, folderId }: LibraryProps) {
         href={contextHref(`/lesson/${item.id}`, learnerId)}
         kind="lesson"
         title={lessonTitleFor(data, item, learnerId)}
-        caption={item.author?.name}
+        caption={item.author && <AuthorCaption author={item.author} />}
         cover={item.cover}
         badge={
           learnerId && (
-            <LessonStatusText
+            <LessonStatusIcons
               lesson={lessonStatusForLearner(data, learnerId, item.id)}
               homework={homeworkStatusForLearner(data, learnerId, item.id)}
             />
@@ -442,7 +443,7 @@ function CatalogMaterials({ query, meta, filter, learnerId }: { query: string; m
           href={catalogHref(`/catalog/${t.id}`, learnerId)}
           kind="textbook"
           title={t.title}
-          caption={t.author?.name}
+          caption={t.author && <AuthorCaption author={t.author} />}
           lessonCount={textbookLessonCount(t)}
           cover={t.cover}
           coverImage={t.coverImage}

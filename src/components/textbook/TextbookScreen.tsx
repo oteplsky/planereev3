@@ -7,7 +7,7 @@ import { ArrowDown, ArrowUp, BookOpen, BookX, Check, ChevronDown, Ellipsis, Fold
 import { ActionsMenu, type CardActions } from "@/components/library/Cards";
 import { LibraryDialogs, requestDelete, type DialogState } from "@/components/library/LibraryDialogs";
 import { shareAction } from "@/components/library/ShareDialog";
-import { LessonStatusText } from "@/components/ui/Badge";
+import { LessonStatusIcons } from "@/components/ui/Badge";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Button, IconButton } from "@/components/ui/Button";
 import { ConfirmDialog, Dialog, PromptDialog } from "@/components/ui/Dialog";
@@ -259,7 +259,7 @@ export function TextbookScreen() {
               dragging={drag?.id === lesson.id}
               status={
                 learnerId && (
-                  <LessonStatusText
+                  <LessonStatusIcons
                     lesson={lessonStatusForLearner(data, learnerId, lesson.id)}
                     homework={homeworkStatusForLearner(data, learnerId, lesson.id)}
                   />
