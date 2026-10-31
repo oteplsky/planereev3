@@ -437,6 +437,10 @@ const learnerLessons: LearnerLesson[] = [
     ),
   ]),
   learnerCopy("ll_anna_intro", "anna", "les_introductions", at("2026-10-01", "15:00")),
+  // Started and left unfinished, no homework: Vocabulary in Use B1 shows «0 из 5».
+  learnerCopy("ll_anna_character", "anna", "les_describing_character", at("2026-09-28", "15:00")),
+  // Set as homework without being taught: the lesson card shows only the homework.
+  learnerCopy("ll_anna_make_do", "anna", "les_make_do", at("2026-10-06", "15:00")),
 
   // Максим — Everyday Vocabulary adapted for medical English
   learnerCopy("ll_max_vocab", "maxim", "les_everyday_vocab", at("2026-10-06", "18:00"), [
@@ -483,6 +487,7 @@ function session(
 const sessions: LessonSession[] = [
   session("ses_anna_intro", "anna", "ll_anna_intro", at("2026-10-01", "15:00"), at("2026-10-01", "16:00")),
   session("ses_anna_ps", "anna", "ll_anna_ps", at("2026-10-07", "15:00"), null),
+  session("ses_anna_character", "anna", "ll_anna_character", at("2026-09-28", "15:00"), null),
 
   session("ses_max_vocab", "maxim", "ll_max_vocab", at("2026-10-06", "18:00"), at("2026-10-06", "19:00")),
 
@@ -523,6 +528,7 @@ function homework(
 
 const homeworkAssignments: HomeworkAssignment[] = [
   homework("hw_anna_extra", "anna", "ll_anna_ps", "blk_anna_extra", at("2026-10-07", "16:00"), "assigned"),
+  homework("hw_anna_make_do", "anna", "ll_anna_make_do", null, at("2026-10-06", "15:00"), "assigned"),
   homework("hw_anna_intro", "anna", "ll_anna_intro", "blk_intro_2", at("2026-10-01", "16:00"), "completed", at("2026-10-03", "20:00")),
 
   homework("hw_max_vocab", "maxim", "ll_max_vocab", "blk_ev_2", at("2026-10-06", "19:00"), "completed", at("2026-10-07", "21:00")),
